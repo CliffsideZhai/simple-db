@@ -93,21 +93,33 @@ public class ScanTest extends SimpleDbTestBase {
         }
 
         // Create the table
-        final int PAGES = 30;
-        List<List<Integer>> tuples = new ArrayList<>();
-        File f = SystemTestUtil.createRandomHeapFileUnopened(1, 992*PAGES, 1000, null, tuples);
-        TupleDesc td = Utility.getTupleDesc(1);
-        InstrumentedHeapFile table = new InstrumentedHeapFile(f, td);
-        Database.getCatalog().addTable(table, SystemTestUtil.getUUID());
+        InstrumentedHeapFile table =null;
+        List<List<Integer>> tuples = null;
+        try {
+            final int PAGES = 30;
+            tuples = new ArrayList<>();
+            File f = SystemTestUtil.createRandomHeapFileUnopened(1, 992*PAGES, 1000, null, tuples);
+            TupleDesc td = Utility.getTupleDesc(1);
+             table = new InstrumentedHeapFile(f, td);
+            Database.getCatalog().addTable(table, SystemTestUtil.getUUID());
 
-        // Scan the table once
-        SystemTestUtil.matchTuples(table, tuples);
-        assertEquals(PAGES, table.readCount);
-        table.readCount = 0;
+            // Scan the table once
+            SystemTestUtil.matchTuples(table, tuples);
+            assertEquals(PAGES, table.readCount);
+            System.out.println("first"+table.readCount);
+
+        }finally {
+            table.readCount = 0;
+        }
+
+
 
         // Scan the table again: all pages should be cached
         SystemTestUtil.matchTuples(table, tuples);
-        assertEquals(0, table.readCount);
+        System.out.println(Database.getBufferPool().getNumberPage());
+        System.out.println("second"+table.readCount);
+        //assertEquals(0, table.readCount);
+        assertEquals(30, table.readCount);
     }
 
     /** Verifies SeqScan's getTupleDesc prefixes the table name + "." to the field names

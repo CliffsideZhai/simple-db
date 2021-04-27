@@ -2,12 +2,12 @@ package simpledb.storage;
 
 import simpledb.common.Database;
 import simpledb.common.DbException;
-import simpledb.common.Debug;
 import simpledb.common.Catalog;
 import simpledb.transaction.TransactionId;
 
 import java.util.*;
 import java.io.*;
+import java.util.function.Consumer;
 
 /**
  * Each instance of HeapPage stores data for one page of HeapFiles and 
@@ -73,18 +73,16 @@ public class HeapPage implements Page {
     */
     private int getNumTuples() {        
         // some code goes here
-        return 0;
-
+        return (BufferPool.getPageSize()* 8) / (td.getSize()*8+1);
     }
 
     /**
      * Computes the number of bytes in the header of a page in a HeapFile with each tuple occupying tupleSize bytes
      * @return the number of bytes in the header of a page in a HeapFile with each tuple occupying tupleSize bytes
      */
-    private int getHeaderSize() {        
-        
+    private int getHeaderSize() {
         // some code goes here
-        return 0;
+        return (getNumTuples()+7)/8;
                  
     }
     
@@ -118,7 +116,8 @@ public class HeapPage implements Page {
      */
     public HeapPageId getId() {
     // some code goes here
-    throw new UnsupportedOperationException("implement this");
+    //throw new UnsupportedOperationException("implement this");
+        return this.pid;
     }
 
     /**
@@ -288,7 +287,21 @@ public class HeapPage implements Page {
      */
     public int getNumEmptySlots() {
         // some code goes here
-        return 0;
+//        int numEmptySlots = 0;
+//        for (int i = 0;i<numSlots;i++){
+//            if (!isSlotUsed(i)){
+//                numEmptySlots++;
+//            }
+//        }
+//        return numEmptySlots;
+        // some code goes here
+        int numEmptSlot = 0;
+        for (int i = 0; i < numSlots; i++) {
+            if (!isSlotUsed(i)) {
+                numEmptSlot += 1;
+            }
+        }
+        return numEmptSlot;
     }
 
     /**
@@ -296,6 +309,17 @@ public class HeapPage implements Page {
      */
     public boolean isSlotUsed(int i) {
         // some code goes here
+//        if (i<numSlots){
+//            int headerNo = i/8;
+//            int offset = i%8;
+//            return (header[headerNo] & (0x1 << offset)) != 0;
+//        }
+//        return false;
+        if (i < numSlots) {
+            int hdNo = (i / 8);
+            int offset = i % 8;
+            return (header[hdNo] & (0x1 << offset)) != 0;
+        }
         return false;
     }
 
@@ -307,13 +331,92 @@ public class HeapPage implements Page {
         // not necessary for lab1
     }
 
+    protected class HeapPageTupleIterator implements Iterator{
+//        private final Iterator<Tuple> iterator;
+//
+//
+//        public HeapPageTupleIterator() {
+//            ArrayList<Tuple> tupleArrayList = new ArrayList<Tuple>(tuples.length);
+//            for (int i =0;i<tuples.length;i++){
+//                if (isSlotUsed(i)){
+//                    tupleArrayList.add(i,tuples[i]);
+//                }
+//            }
+//            iterator = tupleArrayList.iterator();
+//
+//        }
+//
+//        @Override
+//        public boolean hasNext() {
+//            return iterator.hasNext();
+//        }
+//
+//        @Override
+//        public Object next() {
+//            return iterator.next();
+//        }
+//
+//        @Override
+//        public void remove() {
+//            throw new UnsupportedOperationException("TupleIterator: remove not supported");
+//        }
+        private final Iterator<Tuple> iter;
+        public HeapPageTupleIterator() {
+            ArrayList<Tuple> tupleArrayList = new ArrayList<Tuple>(tuples.length);
+            for (int i = 0; i < tuples.length; i++) {
+                if (isSlotUsed(i)) {
+                    tupleArrayList.add(i, tuples[i]);
+                }
+            }
+            iter = tupleArrayList.iterator();
+        }
+
+        @Override
+        public void remove() {
+            throw new UnsupportedOperationException("TupleIterator: remove not supported");
+        }
+
+        @Override
+        public boolean hasNext() {
+            return iter.hasNext();
+        }
+
+        @Override
+        public Object next() {
+            return iter.next();
+        }
+    }
     /**
      * @return an iterator over all tuples on this page (calling remove on this iterator throws an UnsupportedOperationException)
      * (note that this iterator shouldn't return tuples in empty slots!)
      */
     public Iterator<Tuple> iterator() {
         // some code goes here
-        return null;
+//        return new HeapPageTupleIterator();
+        // Done
+        return new Iterator<Tuple>() {
+            private int idx = -1;
+
+            @Override
+            public boolean hasNext() {
+                while (idx+1<numSlots && !isSlotUsed(idx+1)) {
+                    idx++;
+                }
+                return idx+1<numSlots;
+            }
+            @Override
+            public Tuple next() {
+                if (hasNext()) {
+                    return tuples[++idx];
+                } else {
+                    throw new NoSuchElementException();
+                }
+            }
+            @Override
+            public void remove() {
+                throw new UnsupportedOperationException();
+            }
+        };
     }
 
 }

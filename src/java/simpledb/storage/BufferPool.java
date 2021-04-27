@@ -34,12 +34,32 @@ public class BufferPool {
     public static final int DEFAULT_PAGES = 50;
 
     /**
+     *  these are for buffer pool
+     */
+    private final int numberPage ;
+    /**
+     * set map connections
+     */
+    private final ConcurrentHashMap<PageId,Page> bufferPool ;
+
+    public ConcurrentHashMap<PageId, Page> getBufferPool() {
+        return bufferPool;
+    }
+
+    public int getNumberPage() {
+        return numberPage;
+    }
+
+    /**
      * Creates a BufferPool that caches up to numPages pages.
      *
      * @param numPages maximum number of pages in this buffer pool.
      */
     public BufferPool(int numPages) {
         // some code goes here
+        this.numberPage = numPages;
+        this.bufferPool = new ConcurrentHashMap<>(numPages);
+
     }
     
     public static int getPageSize() {
@@ -74,7 +94,22 @@ public class BufferPool {
     public  Page getPage(TransactionId tid, PageId pid, Permissions perm)
         throws TransactionAbortedException, DbException {
         // some code goes here
-        return null;
+        //if it is present
+        if (this.bufferPool.contains(pid)){
+            return this.bufferPool.get(pid);
+        }else {
+            if (this.bufferPool.size() < this.numberPage){
+                Page page = Database.getCatalog()
+                        .getDatabaseFile(pid.getTableId())
+                        .readPage(pid);
+                this.bufferPool.put(pid,page);
+                return page;
+            }else {
+                //i think there should exec evict a old page, and add a new page
+                //may ge will be finished in future
+                throw  new DbException("Buffer pool is full");
+            }
+        }
     }
 
     /**
