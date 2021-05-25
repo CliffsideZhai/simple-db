@@ -9,6 +9,7 @@ import simpledb.transaction.TransactionId;
 
 import java.io.*;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -24,10 +25,14 @@ import java.util.concurrent.ConcurrentHashMap;
  * @Threadsafe, all fields are final
  */
 public class BufferPool {
-    /** Bytes per page, including header. */
+    /**
+     *  Bytes per page, including header.
+     *  <p/>
+     *  默认的page大小
+     * */
     private static final int DEFAULT_PAGE_SIZE = 4096;
 
-    private static int pageSize = DEFAULT_PAGE_SIZE;
+    private static int PageSize = DEFAULT_PAGE_SIZE;
     
     /** Default number of pages passed to the constructor. This is used by
     other classes. BufferPool should use the numPages argument to the
@@ -35,12 +40,16 @@ public class BufferPool {
     public static final int DEFAULT_PAGES = 50;
 
     /**
-     *  these are for buffer pool
+     *  these are for buffer pool.
      *  maximum number of pages in this buffer pool
+     *  <p/>
+     *  buffer池中最大的page数量
      */
     private final int numberPage ;
+
     /**
      * set map connections
+     * 缓存
      */
     private final ConcurrentHashMap<PageId,Page> bufferPool ;
 
@@ -65,17 +74,17 @@ public class BufferPool {
     }
     
     public static int getPageSize() {
-      return pageSize;
+      return PageSize;
     }
     
-    // THIS FUNCTION SHOULD ONLY BE USED FOR TESTING!!
+    // TODO: THIS FUNCTION SHOULD ONLY BE USED FOR TESTING!!
     public static void setPageSize(int pageSize) {
-    	BufferPool.pageSize = pageSize;
+    	BufferPool.PageSize = pageSize;
     }
     
-    // THIS FUNCTION SHOULD ONLY BE USED FOR TESTING!!
+    // TODO: THIS FUNCTION SHOULD ONLY BE USED FOR TESTING!!
     public static void resetPageSize() {
-    	BufferPool.pageSize = DEFAULT_PAGE_SIZE;
+    	BufferPool.PageSize = DEFAULT_PAGE_SIZE;
     }
 
     /**
@@ -97,7 +106,7 @@ public class BufferPool {
         throws TransactionAbortedException, DbException {
         // some code goes here
         //if it is present
-        if (this.bufferPool.contains(pid)){
+        if (this.bufferPool.containsKey(pid)){
             return this.bufferPool.get(pid);
         }else {
             HeapFile table = (HeapFile) Database.getCatalog().getDatabaseFile(pid.getTableId());
