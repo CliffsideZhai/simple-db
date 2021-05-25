@@ -1,14 +1,16 @@
-package simpledb.storage;
+package backup.storage;
 
 import simpledb.common.Database;
-import simpledb.common.Permissions;
 import simpledb.common.DbException;
-import simpledb.common.DeadlockException;
+import simpledb.common.Permissions;
+import simpledb.storage.DbFile;
+import simpledb.storage.Page;
+import simpledb.storage.PageId;
+import simpledb.storage.Tuple;
 import simpledb.transaction.TransactionAbortedException;
 import simpledb.transaction.TransactionId;
 
-import java.io.*;
-
+import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -36,21 +38,20 @@ public class BufferPool {
 
     /**
      *  these are for buffer pool
-     *  maximum number of pages in this buffer pool
      */
     private final int numberPage ;
     /**
      * set map connections
      */
-    private final ConcurrentHashMap<PageId,Page> bufferPool ;
+    private final ConcurrentHashMap<PageId, Page> bufferPool ;
 
     public ConcurrentHashMap<PageId, Page> getBufferPool() {
         return bufferPool;
     }
 
-    public int getNumberPage() {
-        return numberPage;
-    }
+    //public int getNumberPage() {
+    //    return numberPage;
+    //}
 
     /**
      * Creates a BufferPool that caches up to numPages pages.
@@ -100,21 +101,20 @@ public class BufferPool {
         if (this.bufferPool.contains(pid)){
             return this.bufferPool.get(pid);
         }else {
-            HeapFile table = (HeapFile) Database.getCatalog().getDatabaseFile(pid.getTableId());
-            HeapPage newPage = (HeapPage) table.readPage(pid);
-            addNewPage(pid, newPage);
-            return newPage;
+            if (this.bufferPool.size() < this.numberPage){
+                Page page = Database.getCatalog()
+                        .getDatabaseFile(pid.getTableId())
+                        .readPage(pid);
+                this.bufferPool.put(pid,page);
+                return page;
+            }else {
+                //i think there should exec evict a old page, and add a new page
+                //may ge will be finished in future
+                throw  new DbException("Buffer pool is full");
+            }
         }
     }
 
-    // TODO: 在这里实现替换策略
-    private void addNewPage(PageId pid, Page newPage) {
-        bufferPool.put(pid, newPage);
-        //如果超出了最大的缓存页数量
-        if (bufferPool.size() > numberPage) {
-            // TODO:  implement this
-        }
-    }
     /**
      * Releases the lock on a page.
      * Calling this is very risky, and may result in wrong behavior. Think hard
@@ -173,7 +173,7 @@ public class BufferPool {
      * @param tableId the table to add the tuple to
      * @param t the tuple to add
      */
-    public void insertTuple(TransactionId tid, int tableId, Tuple t)
+    public void insertTuple(TransactionId tid, int tableId, simpledb.storage.Tuple t)
         throws DbException, IOException, TransactionAbortedException {
         // some code goes here
         // not necessary for lab1
@@ -205,7 +205,8 @@ public class BufferPool {
         // not necessary for lab1
         DbFile dbFile = Database.getCatalog().getDatabaseFile(t.getRecordId().getPageId().getTableId());
         List<Page> pages = dbFile.deleteTuple(tid, t);
-        for (Page page:pages) {
+        for (Page page:pages
+             ) {
             page.markDirty(true,tid);
             bufferPool.put(page.getId(), page);
         }

@@ -1,18 +1,17 @@
-package simpledb.execution;
+package backup.execution;
 
-import java.awt.image.DataBuffer;
-import java.lang.*;
 import simpledb.common.Database;
-import simpledb.storage.DbFile;
-import simpledb.transaction.TransactionAbortedException;
-import simpledb.transaction.TransactionId;
-import simpledb.common.Type;
 import simpledb.common.DbException;
+import simpledb.common.Type;
+import simpledb.execution.OpIterator;
+import simpledb.storage.DbFile;
 import simpledb.storage.DbFileIterator;
 import simpledb.storage.Tuple;
 import simpledb.storage.TupleDesc;
+import simpledb.transaction.TransactionAbortedException;
+import simpledb.transaction.TransactionId;
 
-import java.util.*;
+import java.util.NoSuchElementException;
 
 /**
  * SeqScan is an implementation of a sequential scan access method that reads
@@ -22,21 +21,13 @@ import java.util.*;
 public class SeqScan implements OpIterator {
 
     private static final long serialVersionUID = 1L;
-    /**
-     * 事务管理id
-     */
     private TransactionId tid;
-
-    /**
-     *
-     */
     private int tableid;
-
     private String tableAlias;
-
+    private DbFile dbFile;
     private DbFileIterator dbfileIterator;
 
-    private TupleDesc td;
+
     /**
      * Creates a sequential scan over the specified table as a part of the
      * specified transaction.
@@ -58,8 +49,8 @@ public class SeqScan implements OpIterator {
         this.tid =tid;
         this.tableid = tableid;
         this.tableAlias = tableAlias;
-
-        this.dbfileIterator = Database.getCatalog().getDatabaseFile(tableid).iterator(tid);
+        this.dbFile = Database.getCatalog().getDatabaseFile(tableid);
+        this.dbfileIterator = dbFile.iterator(tid);
 
     }
 
@@ -95,10 +86,10 @@ public class SeqScan implements OpIterator {
      */
     public void reset(int tableid, String tableAlias) {
         // some code goes here
-        this.tableid = tableid;
+        //this.tableid = tableid;
         this.tableAlias = tableAlias;
-        //this.dbFile = Database.getCatalog().getDatabaseFile(tableid);
-        //this.dbfileIterator = dbFile.iterator(this.tid);
+        this.dbFile = Database.getCatalog().getDatabaseFile(tableid);
+        this.dbfileIterator = dbFile.iterator(this.tid);
     }
 
     public SeqScan(TransactionId tid, int tableId) {
@@ -122,42 +113,34 @@ public class SeqScan implements OpIterator {
      */
     public TupleDesc getTupleDesc() {
         // some code goes here
-//        final TupleDesc tupleDesc = Database.getCatalog().getTupleDesc(tableid);
-//        Type[] types = new Type[tupleDesc.numFields()];
-//        String[] fields = new String[tupleDesc.numFields()];
-//        String prefix = "";
+        final TupleDesc tupleDesc = Database.getCatalog().getTupleDesc(dbFile.getId());
+        Type[] types = new Type[tupleDesc.numFields()];
+        String[] fields = new String[tupleDesc.numFields()];
+        String prefix = "";
+        if (tableAlias != null){
+            prefix = tableAlias;
+        }
+        for (int i =0;i<tupleDesc.numFields();i++){
+            types[i] = tupleDesc.getFieldType(i);
+            String s= tupleDesc.getFieldName(i);
+            if (s ==null){
+                s = "";
+            }
+            s = prefix+"."+s;
+            fields[i] = s;
+        }
+        return new TupleDesc(types,fields);
+        ///////////////////////////
+        // Done
+//        TupleDesc td = Database.getCatalog().getTupleDesc(dbFile.getId());
+//        Type[] types = new Type[td.numFields()];
+//        String[] names = new String[td.numFields()];
 //
-//        for (int i =0;i<tupleDesc.numFields();i++){
-//            types[i] = tupleDesc.getFieldType(i);
-//            if (tableAlias != null){
-//                prefix = tableAlias;
-//            }else {
-//                prefix = "null";
-//            }
-//            String s= tupleDesc.getFieldName(i);
-//            if (s ==null){
-//                s = "null";
-//            }
-//            s = prefix+"."+s;
-//            fields[i] = s;
+//        for (int i=0; i<td.numFields(); i++) {
+//            types[i] = td.getFieldType(i);
+//            names[i] = tableAlias+'.'+td.getFieldName(i);
 //        }
-//        return new TupleDesc(types,fields);
-        if (td != null) {
-            return td;
-        }
-        TupleDesc desc = Database.getCatalog().getTupleDesc(tableid);
-        int fieldNum = desc.numFields();
-        Type[] types = new Type[fieldNum];
-        String[] names = new String[fieldNum];
-        for (int i = 0; i < fieldNum; i++) {
-            types[i] = desc.getFieldType(i);
-            //按照构造器中所说，为了防止意外的null值使此类停止工作，故要加入一些判断
-            String prefix = getAlias() == null ? "null." : getAlias() + ".";
-            String fieldName = desc.getFieldName(i);
-            fieldName = fieldName == null ? "null" : fieldName;
-            names[i] = prefix + fieldName;
-        }
-        return new TupleDesc(types, names);
+//        return new TupleDesc(types, names);
     }
 
     public boolean hasNext() throws TransactionAbortedException, DbException {
@@ -168,21 +151,7 @@ public class SeqScan implements OpIterator {
     public Tuple next() throws NoSuchElementException,
             TransactionAbortedException, DbException {
         // some code goes here
-        Tuple old=dbfileIterator.next();
-        return transTd(old);
-    }
-
-    /**
-     * 将tuple的tupleDesc加上Alias
-     * @param old
-     * @return
-     */
-    private Tuple transTd(Tuple old) {
-        Tuple result = new Tuple(getTupleDesc());
-        for(int i=0;i<old.getTupleDesc().numFields();i++) {
-            result.setField(i, old.getField(i));
-        }
-        return result;
+        return dbfileIterator.next();
     }
 
     public void close() {

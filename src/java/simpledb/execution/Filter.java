@@ -1,5 +1,6 @@
 package simpledb.execution;
 
+import simpledb.storage.TupleIterator;
 import simpledb.transaction.TransactionAbortedException;
 import simpledb.common.DbException;
 import simpledb.storage.Tuple;
@@ -14,8 +15,11 @@ public class Filter extends Operator {
 
     private static final long serialVersionUID = 1L;
 
-    private final Predicate p;
+    private Predicate p;
     private OpIterator child;
+
+    //缓存过滤结果，加快hasNext和next方法
+    private TupleIterator filterResult;
     /**
      * Constructor accepts a predicate to apply and a child operator to read
      * tuples to filter from.
@@ -46,17 +50,29 @@ public class Filter extends Operator {
         // some code goes here
         super.open();
         child.open();
+        filterResult = filter(child,getPredicate());
+        filterResult.open();
     }
-
+    private TupleIterator filter(OpIterator child, Predicate predicate) throws DbException, TransactionAbortedException {
+        ArrayList<Tuple> tuples = new ArrayList<>();
+        while (child.hasNext()) {
+            Tuple t = child.next();
+            if (predicate.filter(t)) {
+                tuples.add(t);
+            }
+        }
+        return new TupleIterator(getTupleDesc(), tuples);
+    }
     public void close() {
         // some code goes here
+        filterResult = null;
         child.close();
         super.close();
     }
 
     public void rewind() throws DbException, TransactionAbortedException {
         // some code goes here
-        child.rewind();
+        filterResult.rewind();
     }
 
     /**
@@ -71,13 +87,9 @@ public class Filter extends Operator {
     protected Tuple fetchNext() throws NoSuchElementException,
             TransactionAbortedException, DbException {
         // some code goes here
-        while (child.hasNext()){
-            Tuple next = child.next();
-            if (p.filter(next)){
-                return next;
-            }
-        }
-        return null;
+        if (filterResult.hasNext()){
+            return filterResult.next();
+        }else return null;
     }
 
     @Override

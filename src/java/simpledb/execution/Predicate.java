@@ -20,6 +20,15 @@ public class Predicate implements Serializable {
         EQUALS, GREATER_THAN, LESS_THAN, LESS_THAN_OR_EQ, GREATER_THAN_OR_EQ, LIKE, NOT_EQUALS;
 
         /**
+         * Interface to access operations by a string containing an integer
+         * index for command-line convenience.
+         *
+         * @param s a string containing a valid integer Op index
+         */
+        public static Op getOp(String s) {
+            return getOp(Integer.parseInt(s));
+        }
+        /**
          * Interface to access operations by integer value for command-line
          * convenience.
          * 

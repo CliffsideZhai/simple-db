@@ -1,8 +1,10 @@
-package simpledb.execution;
+package backup.execution;
 
 import simpledb.common.DbException;
 import simpledb.common.Type;
-import simpledb.storage.DbFileIterator;
+import simpledb.execution.Aggregator;
+import simpledb.execution.OpIterator;
+import simpledb.execution.Operator;
 import simpledb.storage.Tuple;
 import simpledb.storage.TupleDesc;
 import simpledb.transaction.TransactionAbortedException;
@@ -19,29 +21,13 @@ public class Aggregate extends Operator {
 
     private static final long serialVersionUID = 1L;
 
-    private int afield;
-
-    private int gfield;
-    private Aggregator.Op aop;
-
-
     private OpIterator child;
+    private final int afield;
+    private final int gfield;
+    private final Aggregator.Op aop;
 
-    //old td
-    private TupleDesc child_td;
-
-    //聚合的结果通过此AggregatorIterator访问
     private OpIterator iterator;
-
-    //真正的聚合操作是发生在聚合器Aggregator中的，而聚合的结果在iterator()方法的返回值中
     private Aggregator aggregator;
-
-
-    //指定了作为分组依据的那一列的值的类型
-    private Type gbFieldType;
-
-    //new td
-    private TupleDesc td;
 
     /**
      * Constructor.
@@ -62,16 +48,6 @@ public class Aggregate extends Operator {
         this.afield = afield;
         this.gfield = gfield;
         this.aop = aop;
-
-        child_td = child.getTupleDesc();
-        Type aggreType = child_td.getFieldType(afield);
-        //根据进行聚合的列的类型来判断aggreator的类型
-        gbFieldType = gfield == Aggregator.NO_GROUPING ? null : child_td.getFieldType(gfield);
-        if (aggreType == Type.INT_TYPE) {
-            aggregator = new IntegerAggregator(gfield, gbFieldType, afield, aop, getTupleDesc());
-        } else if (aggreType == Type.STRING_TYPE) {
-            aggregator = new StringAggregator(gfield, gbFieldType, afield, aop, getTupleDesc());
-        }
     }
 
     /**
@@ -80,7 +56,13 @@ public class Aggregate extends Operator {
      * {@link Aggregator#NO_GROUPING}
      */
     public int groupField() {
-        return gfield;
+        if (gfield >= 0){
+            return gfield;
+        }else {
+            return Aggregator.NO_GROUPING;
+        }
+        // some code goes here
+        // return -1;
     }
 
     /**
@@ -90,10 +72,12 @@ public class Aggregate extends Operator {
      */
     public String groupFieldName() {
         // some code goes here
-        if (gfield == Aggregator.NO_GROUPING){
-            return null;
+        if (this.groupField()!= Aggregator.NO_GROUPING){
+            TupleDesc tupleDesc = child.getTupleDesc();
+            String fieldName = tupleDesc.getFieldName(this.gfield);
+            return fieldName;
         }
-        return iterator.getTupleDesc().getFieldName(0);
+        return null;
     }
 
     /**
@@ -101,7 +85,7 @@ public class Aggregate extends Operator {
      */
     public int aggregateField() {
         // some code goes here
-        return afield;
+        return this.afield;
     }
 
     /**
@@ -110,10 +94,9 @@ public class Aggregate extends Operator {
      */
     public String aggregateFieldName() {
         // some code goes here
-        if (gfield == Aggregator.NO_GROUPING){
-            return iterator.getTupleDesc().getFieldName(0);
-        }
-        return iterator.getTupleDesc().getFieldName(1);
+        TupleDesc tupleDesc = child.getTupleDesc();
+        String fieldName = tupleDesc.getFieldName(aggregateField());
+        return fieldName;
     }
 
     /**
@@ -132,11 +115,24 @@ public class Aggregate extends Operator {
             TransactionAbortedException {
         // some code goes here
         child.open();
-        super.open();
+        Type groupFieldType = null;
 
-        while (child.hasNext()) {
+        if (gfield != Aggregator.NO_GROUPING){
+            groupFieldType = child.getTupleDesc().getFieldType(gfield);
+        }
+
+        if (child.getTupleDesc().getFieldType(afield) == Type.INT_TYPE){
+            aggregator = new IntegerAggregator(gfield,groupFieldType,afield,aop);
+        }else {
+            aggregator = new StringAggregator(gfield,groupFieldType,afield,aop);
+        }
+
+
+        while (child.hasNext()){
             aggregator.mergeTupleIntoGroup(child.next());
         }
+        child.close();
+        super.open();
         iterator = aggregator.iterator();
         iterator.open();
     }
@@ -158,7 +154,8 @@ public class Aggregate extends Operator {
 
     public void rewind() throws DbException, TransactionAbortedException {
         // some code goes here
-        iterator.rewind();
+        this.close();
+        this.open();
     }
 
     /**
@@ -174,29 +171,25 @@ public class Aggregate extends Operator {
      */
     public TupleDesc getTupleDesc() {
         // some code goes here
-        if (td != null) {
-            return td;
+
+        TupleDesc childTupleDesc = child.getTupleDesc();
+        Type afieldType = childTupleDesc.getFieldType(afield);
+        if (gfield == Aggregator.NO_GROUPING){
+            return new TupleDesc(new Type[]{afieldType},new String[]{
+                    aop.toString()+"("+childTupleDesc.getFieldName(afield)+")"
+            });
+        }else {
+            return new TupleDesc(new Type[]{childTupleDesc.getFieldType(gfield),childTupleDesc.getFieldType(afield)}
+            ,new String[]{childTupleDesc.getFieldName(gfield),childTupleDesc.getFieldName(afield)});
         }
-        Type[] types;
-        String[] names;
-        String aggName = child_td.getFieldName(afield);
-        if (gfield == Aggregator.NO_GROUPING) {
-            types = new Type[]{Type.INT_TYPE};
-            // TODO: 17-7-6  names = new String[]{aggName+"("+aggreOp.toString()+")"};这样不是按照注视来的吗，结果通不过测试
-            names = new String[]{aggName};
-        } else {
-            types = new Type[]{gbFieldType, Type.INT_TYPE};
-            names = new String[]{child_td.getFieldName(gfield), aggName};
-        }
-        td = new TupleDesc(types, names);
-        return td;
+
+        //return null;
     }
 
     public void close() {
-        iterator.close();
         super.close();
+        iterator.close();
         // some code goes here
-        child.close();
     }
 
     @Override

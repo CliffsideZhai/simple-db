@@ -1,4 +1,4 @@
-package simpledb.common;
+package backup.common;
 
 import simpledb.common.Type;
 import simpledb.storage.DbFile;
@@ -9,7 +9,10 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.NoSuchElementException;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -70,13 +73,9 @@ public class Catalog {
      */
     public void addTable(DbFile file, String name, String pkeyField) {
         // some code goes here
-        if (name == null || pkeyField == null) {
-            throw new IllegalArgumentException();
-        }
         DbTable dbTable = new DbTable(file, name, pkeyField);
-        int tableID = file.getId();
-        this.catalog.put(tableID,dbTable);
-        this.name2Idmap.put(name,tableID);
+        this.catalog.put(file.getId(),dbTable);
+        this.name2Idmap.put(name,file.getId());
 
     }
 
@@ -110,9 +109,6 @@ public class Catalog {
         throw new NoSuchElementException("name not exist");
     }
 
-    private boolean isIdValid(int id, ConcurrentHashMap<?, ?> map) {
-        return map.containsKey(id);
-    }
     /**
      * Returns the tuple descriptor (schema) of the specified table
      * @param tableid The id of the table, as specified by the DbFile.getId()
@@ -121,11 +117,17 @@ public class Catalog {
      */
     public TupleDesc getTupleDesc(int tableid) throws NoSuchElementException {
         // some code goes here
-
-        if (!isIdValid(tableid, catalog)) {
+        DbFile databaseFile = getDatabaseFile(tableid);
+        TupleDesc tupleDesc = null;
+        if (databaseFile ==null){
             throw new NoSuchElementException();
+        }else {
+            tupleDesc = databaseFile.getTupleDesc();
+            if (tupleDesc == null){
+                throw new NoSuchElementException();
+            }
         }
-        return getDatabaseFile(tableid).getTupleDesc();
+        return tupleDesc;
     }
 
     /**
@@ -136,21 +138,16 @@ public class Catalog {
      */
     public DbFile getDatabaseFile(int tableid) throws NoSuchElementException {
         // some code goes here
-
-        if (!isIdValid(tableid, catalog)) {
-            throw new NoSuchElementException();
+        DbTable table = catalog.get(tableid);
+        if (table != null) {
+            return table.getFile();
         }
-        return catalog.get(tableid).getFile();
+        throw new NoSuchElementException();
     }
 
     public String getPrimaryKey(int tableid) {
         // some code goes here
-
-        if (!isIdValid(tableid, catalog)) {
-            throw new NoSuchElementException();
-        }
-        return catalog.get(tableid).getPkeyField();
-
+        return this.catalog.get(tableid).getPkeyField();
     }
 
     public Iterator<Integer> tableIdIterator() {

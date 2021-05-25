@@ -2,16 +2,10 @@ package simpledb.execution;
 
 import simpledb.common.DbException;
 import simpledb.common.Type;
-import simpledb.storage.Field;
-import simpledb.storage.IntField;
-import simpledb.storage.Tuple;
-import simpledb.storage.TupleDesc;
+import simpledb.storage.*;
 import simpledb.transaction.TransactionAbortedException;
 
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.NoSuchElementException;
+import java.util.*;
 
 /**
  * Knows how to compute some aggregate over a set of StringFields.
@@ -20,14 +14,27 @@ public class StringAggregator implements Aggregator {
 
     private static final long serialVersionUID = 1L;
 
-    private final int gbfield ;
-    //private final int afield;
-    private Type gbfieldtype;
-    private Op op;
+    //该索引值指定了要使用tuple的哪一个列来分组
+    int gbIndex;
 
-    private final TupleDesc tupleDesc;
-    //private final Map<Field,Integer> vals;
-    private final Map<Field,Integer> cnts;
+    //该索引指定了要使用tuple的哪一个列来聚合
+    int agIndex;
+
+    //聚合前tuple的行描述
+    TupleDesc originalTd;
+
+    //指定了作为分组依据的那一列的值的类型
+    Type gbFieldType;
+
+    //指定使用哪种聚合操作
+    Op aggreOp;
+
+    //group-by value到aggregate value的映射
+    HashMap<Field, Integer> gval2agval;
+
+    //聚合后的td
+    private TupleDesc td;
+
 
     /**
      * Aggregate constructor
@@ -43,15 +50,40 @@ public class StringAggregator implements Aggregator {
         if (what != Op.COUNT){
             throw new IllegalArgumentException();
         }
-        this.gbfieldtype = gbfieldtype;
-        this.gbfield = gbfield;
-        //this.afield = afield;
-        this.op = what;
+        this.gbFieldType = gbfieldtype;
+        this.gbIndex = gbfield;
+        this.agIndex = afield;
+        this.aggreOp = what;
 
-        tupleDesc = (gbfield == Aggregator.NO_GROUPING)? new TupleDesc(new Type[]{Type.INT_TYPE}):
+        td= (gbfield == Aggregator.NO_GROUPING)? new TupleDesc(new Type[]{Type.INT_TYPE}):
                 new TupleDesc(new Type[]{gbfieldtype,Type.INT_TYPE});
         //vals = new HashMap<Field,Integer>();
-        cnts = new HashMap<Field,Integer>();
+        gval2agval = new HashMap<>();
+
+    }
+
+    /**
+     * Aggregate constructor
+     *
+     * @param gbIndex     the 0-based index of the group-by field in the tuple, or NO_GROUPING if there is no grouping
+     * @param gbfieldtype the type of the group by field (e.g., Type.INT_TYPE), or null if there is no grouping
+     * @param agIndex     the 0-based index of the aggregate field in the tuple
+     * @param aggreOp     aggregation operator to use -- only supports COUNT
+     * @param td          我加上的一个参数，由聚合器的使用者(一般是Aggregate类)负责传入
+     * @throws IllegalArgumentException if aggreOp != COUNT
+     */
+
+    public StringAggregator(int gbIndex, Type gbfieldtype, int agIndex, Op aggreOp,TupleDesc td) {
+        // some code goes here
+        if (aggreOp != Op.COUNT) {
+            throw new UnsupportedOperationException("String类型值只支持count操作,不支持" + aggreOp);
+        }
+        this.gbIndex = gbIndex;
+        this.agIndex = agIndex;
+        this.aggreOp = aggreOp;
+        this.td = td;
+        this.gbFieldType = gbfieldtype;
+        gval2agval = new HashMap<>();
     }
 
     /**
@@ -59,15 +91,36 @@ public class StringAggregator implements Aggregator {
      * @param tup the Tuple containing an aggregate field and a group-by field
      */
     public void mergeTupleIntoGroup(Tuple tup) {
-        // some code goes here
-        Field key = (gbfield == NO_GROUPING)?null:tup.getField(gbfield);
-        if (key!=null){
-            if (cnts.containsKey(key)){
-                cnts.put(key,cnts.get(key)+1);
-            }else {
-                cnts.put(key,1);
-            }
+        //待聚合值所在的Field
+        Field aggreField;
+        //分组依据的Field
+        Field gbField = null;
+        //新的聚合结果
+        Integer newVal;
+        aggreField = tup.getField(agIndex);
+
+        if (aggreField.getType() != Type.STRING_TYPE) {
+            throw new IllegalArgumentException("该tuple的指定列不是Type.STRING_TYPE类型");
         }
+
+        //初始化originalTd，并确保每一次聚合的tuple的td与其相同
+        if (originalTd == null) {
+            originalTd = tup.getTupleDesc();
+        } else if (!originalTd.equals(tup.getTupleDesc())) {
+            throw new IllegalArgumentException("待聚合tuple的tupleDesc与之前不一致");
+        }
+
+        if (gbIndex != Aggregator.NO_GROUPING) {
+            //如果gbIdex为NO_GROUPING，那么不用给gbField赋值，即为初始值null即可
+            gbField = tup.getField(gbIndex);
+        }
+
+        //开始进行聚合操作
+        if (gval2agval.containsKey(gbField)) {
+            Integer oldVal = gval2agval.get(gbField);
+            newVal = oldVal + 1;
+        } else newVal = 1;
+        gval2agval.put(gbField, newVal);
     }
 
     /**
@@ -81,46 +134,19 @@ public class StringAggregator implements Aggregator {
     public OpIterator iterator() {
         // some code goes here
         //throw new UnsupportedOperationException("please implement me for lab2");
-        return new OpIterator() {
-            private Iterator<Field> child;
-            @Override
-            public void open() throws DbException, TransactionAbortedException {
-                child = cnts.keySet().iterator();
+        ArrayList<Tuple> tuples = new ArrayList<>();
+        for (Map.Entry<Field, Integer> g2a : gval2agval.entrySet()) {
+            Tuple t = new Tuple(td);//该tuple不必setRecordId，因为RecordId对进行操作后的tuple没有意义
+            //分别处理不分组与有分组的情形
+            if (gbIndex == Aggregator.NO_GROUPING) {
+                t.setField(0, new IntField(g2a.getValue()));
+            } else {
+                t.setField(0, g2a.getKey());
+                t.setField(1, new IntField(g2a.getValue()));
             }
-
-            @Override
-            public boolean hasNext() throws DbException, TransactionAbortedException {
-                return child!=null && child.hasNext();
-            }
-
-            @Override
-            public Tuple next() throws DbException, TransactionAbortedException, NoSuchElementException {
-                Tuple tuple = new Tuple(tupleDesc);
-                Field next = child.next();
-                if (1 == tupleDesc.numFields()){
-                    tuple.setField(0,new IntField(cnts.get(next)));
-                }else {
-                    tuple.setField(0,next);
-                    tuple.setField(1,new IntField(cnts.get(next)));
-                }
-                return tuple;
-            }
-
-            @Override
-            public void rewind() throws DbException, TransactionAbortedException {
-                child = cnts.keySet().iterator();
-            }
-
-            @Override
-            public TupleDesc getTupleDesc() {
-                return tupleDesc;
-            }
-
-            @Override
-            public void close() {
-                child = null;
-            }
-        };
+            tuples.add(t);
+        }
+        return new TupleIterator(td, tuples);
     }
 
 }

@@ -1,12 +1,15 @@
-package simpledb.systemtest;
+package simpledb.success.backup;
 
+import org.junit.Test;
 import simpledb.common.Database;
 import simpledb.common.DbException;
 import simpledb.common.Utility;
 import simpledb.execution.SeqScan;
 import simpledb.storage.*;
-
-import static org.junit.Assert.*;
+import simpledb.systemtest.SimpleDbTestBase;
+import simpledb.systemtest.SystemTestUtil;
+import simpledb.transaction.TransactionAbortedException;
+import simpledb.transaction.TransactionId;
 
 import java.io.File;
 import java.io.IOException;
@@ -15,10 +18,8 @@ import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Random;
 
-import org.junit.Test;
-
-import simpledb.transaction.TransactionAbortedException;
-import simpledb.transaction.TransactionId;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 /**
  * Dumps the contents of a table.
@@ -73,25 +74,25 @@ public class ScanTest extends SimpleDbTestBase {
         Database.getBufferPool().transactionComplete(tid);
     }
 
-    /** Verifies that the buffer pool is actually caching data.
-     * @throws TransactionAbortedException
-     * @throws DbException */
-    @Test public void testCache() throws IOException, DbException, TransactionAbortedException {
-        /* Counts the number of readPage operations. */
-        class InstrumentedHeapFile extends HeapFile {
-            public InstrumentedHeapFile(File f, TupleDesc td) {
-                super(f, td);
-            }
-
-            @Override
-            public Page readPage(PageId pid) throws NoSuchElementException {
-                readCount += 1;
-                return super.readPage(pid);
-            }
-
-            public int readCount = 0;
-        }
-
+//    /** Verifies that the buffer pool is actually caching data.
+//     * @throws TransactionAbortedException
+//     * @throws DbException */
+//    @Test public void testCache() throws IOException, DbException, TransactionAbortedException {
+//        /* Counts the number of readPage operations. */
+//        class InstrumentedHeapFile extends HeapFile {
+//            public InstrumentedHeapFile(File f, TupleDesc td) {
+//                super(f, td);
+//            }
+//
+//            @Override
+//            public Page readPage(PageId pid) throws NoSuchElementException {
+//                readCount += 1;
+//                return super.readPage(pid);
+//            }
+//
+//            public int readCount = 0;
+//        }
+//
 //        // Create the table
 //        InstrumentedHeapFile table =null;
 //        List<List<Integer>> tuples = null;
@@ -111,6 +112,36 @@ public class ScanTest extends SimpleDbTestBase {
 //        }finally {
 //            table.readCount = 0;
 //        }
+//
+//
+//
+//        // Scan the table again: all pages should be cached
+//        SystemTestUtil.matchTuples(table, tuples);
+//        System.out.println(Database.getBufferPool().getNumberPage());
+//        System.out.println("second"+table.readCount);
+//        assertEquals(0, table.readCount);
+//        assertEquals(30, table.readCount);
+//    }
+
+    /** Verifies that the buffer pool is actually caching data.
+     * @throws TransactionAbortedException
+     * @throws DbException */
+    @Test public void testCache() throws IOException, DbException, TransactionAbortedException {
+        /* Counts the number of readPage operations. */
+        class InstrumentedHeapFile extends HeapFile {
+            public InstrumentedHeapFile(File f, TupleDesc td) {
+                super(f, td);
+            }
+
+            @Override
+            public Page readPage(PageId pid) throws NoSuchElementException {
+                readCount += 1;
+                return super.readPage(pid);
+            }
+
+            public int readCount = 0;
+        }
+
         // Create the table
         final int PAGES = 30;
         List<List<Integer>> tuples = new ArrayList<>();
@@ -124,14 +155,10 @@ public class ScanTest extends SimpleDbTestBase {
         assertEquals(PAGES, table.readCount);
         table.readCount = 0;
 
-        System.out.println(table.readCount);
         // Scan the table again: all pages should be cached
         SystemTestUtil.matchTuples(table, tuples);
-        System.out.println(table.readCount);
         assertEquals(0, table.readCount);
-        //assertEquals(30, table.readCount);
     }
-
     /** Verifies SeqScan's getTupleDesc prefixes the table name + "." to the field names
      * @throws IOException
      */

@@ -1,15 +1,16 @@
-package simpledb.storage;
+package backup.storage;
 
 //import simpledb.myStorage.myTupleDesc;
 
+import simpledb.storage.Field;
+import simpledb.storage.RecordId;
+import simpledb.storage.TupleDesc;
+
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Iterator;
-import java.util.NoSuchElementException;
 
 /**
- * TODO : 只用数组实现提升性能 <br/>
  * Tuple maintains information about the contents of a tuple. Tuples have a
  * specified schema specified by a TupleDesc object and contain Field objects
  * with the data for each field.
@@ -17,11 +18,8 @@ import java.util.NoSuchElementException;
 public class Tuple implements Serializable {
 
     private static final long serialVersionUID = 1L;
-
     private TupleDesc tupleDesc;
-
-    private Field[] fields;
-
+    private ArrayList<Field> fields;
     private RecordId recordId;
     /**
      * Create a new tuple with the specified schema (type).
@@ -33,7 +31,6 @@ public class Tuple implements Serializable {
     public Tuple(TupleDesc td) {
         // some code goes here
         resetTupleDesc(td);
-        fields = new Field[td.numFields()];
     }
 
     /**
@@ -74,14 +71,7 @@ public class Tuple implements Serializable {
      */
     public void setField(int i, Field f) {
         // some code goes here
-        if (!isValidIndex(i)){
-            throw new IllegalArgumentException("Field 索引值不合法");
-        }
-        fields[i] = f;
-    }
-
-    private boolean isValidIndex(int index) {
-        return index >= 0 && index < fields.length;
+        fields.set(i,f);
     }
 
     /**
@@ -92,10 +82,7 @@ public class Tuple implements Serializable {
      */
     public Field getField(int i) {
         // some code goes here
-        if (!isValidIndex(i)) {
-            throw new IllegalArgumentException("Field 索引值不合法");
-        }
-        return fields[i];
+        return this.fields.get(i);
     }
 
     /**
@@ -108,43 +95,22 @@ public class Tuple implements Serializable {
      */
     public String toString() {
         // some code goes here
-        StringBuffer rowString = new StringBuffer();
-        for (int i = 0; i < fields.length; i++) {
-            if (i == fields.length - 1) {
-                //如果是最后一个Field，就接换行符，否则接空格
-                rowString.append(fields[i].toString() + "\n");
-            } else {
-                rowString.append(fields[i].toString() + "\t");
-            }
+        String s = new String();
+        for (int i=0;i<fields.size()-1;i++){
+            s += fields.get(i).toString()+"\t";
         }
-        return rowString.toString();
+        s += fields.get(fields.size()-1) +"\n";
+        return s;
     }
 
     /**
      * @return
      *        An iterator which iterates over all the fields of this tuple
      * */
-    public Iterator<Field> fields() {
+    public Iterator<Field> fields()
+    {
         // some code goes here
-        return new FieldIterator();
-    }
-
-    private class FieldIterator implements Iterator<Field> {
-        private int pos = 0;
-
-        @Override
-        public boolean hasNext() {
-
-            return fields.length > pos;
-        }
-
-        @Override
-        public Field next() {
-            if (!hasNext()) {
-                throw new NoSuchElementException();
-            }
-            return fields[pos++];
-        }
+        return fields.iterator();
     }
 
     /**
@@ -154,6 +120,9 @@ public class Tuple implements Serializable {
     {
         // some code goes here
         this.tupleDesc =td;
-        this.fields = new Field[td.numFields()];
+        this.fields = new ArrayList<Field>(td.numFields());
+        for (int i=0;i<td.numFields();i++){
+            this.fields.add(null);
+        }
     }
 }

@@ -1,19 +1,26 @@
-package simpledb.storage;
+package backup.storage;
 
+import simpledb.common.Catalog;
 import simpledb.common.Database;
 import simpledb.common.DbException;
-import simpledb.common.Catalog;
+import simpledb.storage.BufferPool;
+import simpledb.storage.Tuple;
+import simpledb.storage.TupleDesc;
+import simpledb.storage.*;
 import simpledb.transaction.TransactionId;
 
-import java.util.*;
 import java.io.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.NoSuchElementException;
 
 /**
  * Each instance of HeapPage stores data for one page of HeapFiles and 
  * implements the Page interface that is used by BufferPool.
  *
  * @see HeapFile
- * @see BufferPool
+ * @see simpledb.storage.BufferPool
  *
  */
 public class HeapPage implements Page {
@@ -21,11 +28,14 @@ public class HeapPage implements Page {
     final HeapPageId pid;
     final TupleDesc td;
     final byte[] header;
-    final Tuple[] tuples;
+    final simpledb.storage.Tuple[] tuples;
     final int numSlots;
 
     byte[] oldData;
     private final Byte oldDataLock= (byte) 0;
+
+    private HashMap<String, Boolean> dirtyMap = new HashMap<>();
+    private HashMap<String,TransactionId> dirtyTrans = new HashMap<>();
 
     /**
      * Create a HeapPage from a set of bytes of data read from disk.
@@ -41,7 +51,7 @@ public class HeapPage implements Page {
      * <p>
      * @see Database#getCatalog
      * @see Catalog#getTupleDesc
-     * @see BufferPool#getPageSize()
+     * @see simpledb.storage.BufferPool#getPageSize()
      */
     public HeapPage(HeapPageId id, byte[] data) throws IOException {
         this.pid = id;
@@ -54,7 +64,7 @@ public class HeapPage implements Page {
         for (int i=0; i<header.length; i++)
             header[i] = dis.readByte();
         
-        tuples = new Tuple[numSlots];
+        tuples = new simpledb.storage.Tuple[numSlots];
         try{
             // allocate and read the actual records of this page
             for (int i=0; i<tuples.length; i++)
@@ -72,11 +82,7 @@ public class HeapPage implements Page {
     */
     private int getNumTuples() {        
         // some code goes here
-        if (numSlots != 0) {
-            return numSlots;
-        }
-        //int的四则运算就是向下取整的
-        return (BufferPool.getPageSize()* 8) / (td.getSize()*8+1);
+        return (simpledb.storage.BufferPool.getPageSize()* 8) / (td.getSize()*8+1);
     }
 
     /**
@@ -85,7 +91,7 @@ public class HeapPage implements Page {
      */
     private int getHeaderSize() {
         // some code goes here
-        return (int) ((int) (getNumTuples()+7)/(8.0));
+        return (getNumTuples()+7)/8;
                  
     }
     
@@ -126,7 +132,7 @@ public class HeapPage implements Page {
     /**
      * Suck up tuples from the source file.
      */
-    private Tuple readNextTuple(DataInputStream dis, int slotId) throws NoSuchElementException {
+    private simpledb.storage.Tuple readNextTuple(DataInputStream dis, int slotId) throws NoSuchElementException {
         // if associated bit is not set, read forward to the next tuple, and
         // return null.
         if (!isSlotUsed(slotId)) {
@@ -141,8 +147,8 @@ public class HeapPage implements Page {
         }
 
         // read fields in the tuple
-        Tuple t = new Tuple(td);
-        RecordId rid = new RecordId(pid, slotId);
+        simpledb.storage.Tuple t = new simpledb.storage.Tuple(td);
+        simpledb.storage.RecordId rid = new simpledb.storage.RecordId(pid, slotId);
         t.setRecordId(rid);
         try {
             for (int j=0; j<td.numFields(); j++) {
@@ -169,7 +175,7 @@ public class HeapPage implements Page {
      * @return A byte array correspond to the bytes of this page.
      */
     public byte[] getPageData() {
-        int len = BufferPool.getPageSize();
+        int len = simpledb.storage.BufferPool.getPageSize();
         ByteArrayOutputStream baos = new ByteArrayOutputStream(len);
         DataOutputStream dos = new DataOutputStream(baos);
 
@@ -212,7 +218,7 @@ public class HeapPage implements Page {
         }
 
         // padding
-        int zerolen = BufferPool.getPageSize() - (header.length + td.getSize() * tuples.length); //- numSlots * td.getSize();
+        int zerolen = simpledb.storage.BufferPool.getPageSize() - (header.length + td.getSize() * tuples.length); //- numSlots * td.getSize();
         byte[] zeroes = new byte[zerolen];
         try {
             dos.write(zeroes, 0, zerolen);
@@ -250,9 +256,25 @@ public class HeapPage implements Page {
      *         already empty.
      * @param t The tuple to delete
      */
-    public void deleteTuple(Tuple t) throws DbException {
+    public void deleteTuple(simpledb.storage.Tuple t) throws DbException {
         // some code goes here
         // not necessary for lab1
+//
+//        assert t!=null;
+//        RecordId recordId = t.getRecordId();
+//        PageId pageId = recordId.getPageId();
+//
+//        if (recordId!=null && pid.equals(pageId)){
+//            for (int i = 0; i < numSlots; i++) {
+//                if (isSlotUsed(i)&&tuples[i].getRecordId().equals(recordId)){
+//                    markSlotUsed(i,false);
+//                    tuples[i] = null;
+//                    return;
+//                }
+//            }
+//            throw new DbException("deleteTuple: Error: tuple slot is empty");
+//        }
+//        throw new DbException("deleteTuple: Error: tuple is not on this page");
         // Done
         if (pid.equals(t.getRecordId().getPageId())) {
             int tupleno = t.getRecordId().getTupleNumber();
@@ -277,14 +299,28 @@ public class HeapPage implements Page {
      *         is mismatch.
      * @param t The tuple to add.
      */
-    public void insertTuple(Tuple t) throws DbException {
+    public void insertTuple(simpledb.storage.Tuple t) throws DbException {
         // some code goes here
         // not necessary for lab1
-
+//        assert t!=null;
+//        RecordId recordId = t.getRecordId();
+//
+//        PageId pageId = recordId.getPageId();
+//        if (this.td.equals(t.getTupleDesc())){
+//            for (int i = 0; i < numSlots; i++) {
+//               if (!isSlotUsed(i)){
+//                   tuples[i]= t;
+//                   markSlotUsed(i,true);
+//                   t.setRecordId(new RecordId(this.pid,i));
+//                   return;
+//               }
+//            }
+//            throw new DbException("insertTuple: ERROR: no tuple is inserted");
+//        }
 //        throw new DbException("insertTuple: no empty slots or tupledesc is mismatch");
         for (int i=0; i<numSlots; i++) {
             if (!isSlotUsed(i)) {
-                t.setRecordId(new RecordId(pid, i));
+             //   t.setRecordId(new RecordId(pid, i));
                 tuples[i] = t;
                 markSlotUsed(i, true);
                 return;
@@ -300,6 +336,14 @@ public class HeapPage implements Page {
     public void markDirty(boolean dirty, TransactionId tid) {
         // some code goes here
         // not necessary for lab1
+        if (dirty == true){
+
+            dirtyMap.put("dirty",dirty);
+            dirtyTrans.put("tid",tid);
+        }else {
+            dirtyMap.put("dirty",false);
+            dirtyTrans.put("tid",null);
+        }
 
     }
 
@@ -309,7 +353,7 @@ public class HeapPage implements Page {
     public TransactionId isDirty() {
         // some code goes here
         // Not necessary for lab1
-        return null;
+        return dirtyTrans.get("tid");
     }
 
     /**
@@ -317,7 +361,14 @@ public class HeapPage implements Page {
      */
     public int getNumEmptySlots() {
         // some code goes here
-
+//        int numEmptySlots = 0;
+//        for (int i = 0;i<numSlots;i++){
+//            if (!isSlotUsed(i)){
+//                numEmptySlots++;
+//            }
+//        }
+//        return numEmptySlots;
+        // some code goes here
         int num = 0;
 
         for (int i=0; i<numSlots; i++) {
@@ -333,7 +384,12 @@ public class HeapPage implements Page {
      */
     public boolean isSlotUsed(int i) {
         // some code goes here
-
+//        if (i<numSlots){
+//            int headerNo = i/8;
+//            int offset = i%8;
+//            return (header[headerNo] & (0x1 << offset)) != 0;
+//        }
+//        return false;
         if (i < numSlots) {
             int hdNo = (i / 8);
             int offset = i % 8;
@@ -373,34 +429,91 @@ public class HeapPage implements Page {
     }
 
     protected class HeapPageTupleIterator implements Iterator{
-        private int pos = 0;
-        private int index = 0;//tuple数组的下标变化
-        private int usedTuplesNum = getNumTuples() - getNumEmptySlots();
-
-        @Override
-        public boolean hasNext() {
-            return index < getNumTuples() && pos < usedTuplesNum;
+//        private final Iterator<Tuple> iterator;
+//
+//
+//        public HeapPageTupleIterator() {
+//            ArrayList<Tuple> tupleArrayList = new ArrayList<Tuple>(tuples.length);
+//            for (int i =0;i<tuples.length;i++){
+//                if (isSlotUsed(i)){
+//                    tupleArrayList.add(i,tuples[i]);
+//                }
+//            }
+//            iterator = tupleArrayList.iterator();
+//
+//        }
+//
+//        @Override
+//        public boolean hasNext() {
+//            return iterator.hasNext();
+//        }
+//
+//        @Override
+//        public Object next() {
+//            return iterator.next();
+//        }
+//
+//        @Override
+//        public void remove() {
+//            throw new UnsupportedOperationException("TupleIterator: remove not supported");
+//        }
+        private final Iterator<simpledb.storage.Tuple> iter;
+        public HeapPageTupleIterator() {
+            ArrayList<simpledb.storage.Tuple> tupleArrayList = new ArrayList<simpledb.storage.Tuple>(tuples.length);
+            for (int i = 0; i < tuples.length; i++) {
+                if (isSlotUsed(i)) {
+                    tupleArrayList.add(i, tuples[i]);
+                }
+            }
+            iter = tupleArrayList.iterator();
         }
 
         @Override
-        public Tuple next() {
-            if (!hasNext()) {
-                throw new NoSuchElementException();
-            }
-            for (; !isSlotUsed(index); index++) {
-            }//直到找到在使用的(对应的slot非空的)tuple，再返回
-            pos++;
-            return tuples[index++];
+        public void remove() {
+            throw new UnsupportedOperationException("TupleIterator: remove not supported");
+        }
+
+        @Override
+        public boolean hasNext() {
+            return iter.hasNext();
+        }
+
+        @Override
+        public Object next() {
+            return iter.next();
         }
     }
     /**
      * @return an iterator over all tuples on this page (calling remove on this iterator throws an UnsupportedOperationException)
      * (note that this iterator shouldn't return tuples in empty slots!)
      */
-    public Iterator<Tuple> iterator() {
+    public Iterator<simpledb.storage.Tuple> iterator() {
         // some code goes here
+//        return new HeapPageTupleIterator();
         // Done
-        return new HeapPageTupleIterator();
+        return new Iterator<simpledb.storage.Tuple>() {
+            private int idx = -1;
+
+            @Override
+            public boolean hasNext() {
+                while (idx+1<numSlots && !isSlotUsed(idx+1)) {
+                    idx++;
+                }
+                return idx+1<numSlots;
+            }
+            @Override
+            public Tuple next() {
+                if (hasNext()) {
+                    return tuples[++idx];
+                } else {
+                    throw new NoSuchElementException();
+                }
+            }
+            @Override
+            public void remove() {
+                throw new UnsupportedOperationException();
+            }
+        };
     }
 
 }

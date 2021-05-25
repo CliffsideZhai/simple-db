@@ -1,11 +1,17 @@
-package simpledb.execution;
+package backup.execution;
 
-import simpledb.common.Type;
-import simpledb.storage.*;
-import simpledb.transaction.TransactionAbortedException;
 import simpledb.common.DbException;
+import simpledb.execution.JoinPredicate;
+import simpledb.execution.OpIterator;
+import simpledb.execution.Operator;
+import simpledb.storage.Tuple;
+import simpledb.storage.TupleDesc;
+import simpledb.storage.TupleIterator;
+import simpledb.transaction.TransactionAbortedException;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.NoSuchElementException;
 
 /**
  * The Join operator implements the relational join operation.
@@ -14,7 +20,7 @@ public class Join extends Operator {
 
     private static final long serialVersionUID = 1L;
     private final JoinPredicate joinPredicate;
-    private  OpIterator child1 , child2;
+    private OpIterator child1 , child2;
 
     private Tuple tuple1;
     private int state = 0;

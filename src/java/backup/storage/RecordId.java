@@ -1,4 +1,6 @@
-package simpledb.storage;
+package backup.storage;
+
+import simpledb.storage.PageId;
 
 import java.io.Serializable;
 
@@ -11,8 +13,8 @@ public class RecordId implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
-    private PageId pid;
-    private int tupleno;
+    private final PageId pid;
+    private final int tupleno;
 
     /**
      * Creates a new RecordId referring to the specified PageId and tuple
@@ -55,13 +57,17 @@ public class RecordId implements Serializable {
     public boolean equals(Object o) {
         // some code goes here
         //throw new UnsupportedOperationException("implement this");
-        if (o == this) {
-            return true;
-        } else if (o instanceof RecordId) {
-            RecordId another = (RecordId) o;
-            return pid.equals(another.getPageId())
-                    && another.getTupleNumber() ==  this.tupleno;
-        } else return false;
+        if (o != null && o.getClass() == RecordId.class) {
+            return this.pid.equals(((RecordId) o).getPageId())
+                    && this.tupleno == ((RecordId) o).getTupleNumber();
+        }
+        return false;
+//        if (o != null && o instanceof RecordId) {
+//            RecordId rid = (RecordId) o;
+//            return rid.tupleno == this.tupleno
+//                    && rid.pid.equals(this.pid);
+//        }
+//        return false;
     }
 
     /**
