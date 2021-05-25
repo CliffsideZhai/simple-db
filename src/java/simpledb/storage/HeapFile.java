@@ -16,7 +16,7 @@ import java.util.*;
  * closely with HeapPage. The format of HeapPages is described in the HeapPage
  * constructor.
  * 
- * @see HeapPage#HeapPage
+ * @see HeapPage
  * @author Sam Madden
  */
 public class HeapFile implements DbFile {

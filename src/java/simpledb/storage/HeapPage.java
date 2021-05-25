@@ -18,13 +18,45 @@ import java.io.*;
  */
 public class HeapPage implements Page {
 
+    /**
+     * @see HeapPageId
+     * page的id
+     */
     final HeapPageId pid;
+
+    /**
+     * tuple的描述
+     */
     final TupleDesc td;
+
+    /**
+     * page里的bitmap，一个字节4位，0001表示1对应的位置已经被使用
+     */
     final byte[] header;
+
+    /**
+     * page存储的tuple
+     */
     final Tuple[] tuples;
+
+    /**
+     * slot的数量
+     */
     final int numSlots;
 
+    private TransactionId lastDirtyOperation;
+
+    /**
+     * <br/>
+     * 如果一个HeapPage在修改前调用setBeforeImage(),就能将当前的数据保留下来到oldData
+     * 同样，在修改后调用get，可以拿到修改前的
+     * @apiNote setBeforeImage . getBeforeImage
+     */
     byte[] oldData;
+
+    /**
+     * 锁
+     */
     private final Byte oldDataLock= (byte) 0;
 
     /**
@@ -300,7 +332,7 @@ public class HeapPage implements Page {
     public void markDirty(boolean dirty, TransactionId tid) {
         // some code goes here
         // not necessary for lab1
-
+        lastDirtyOperation = dirty ? tid : null;
     }
 
     /**
@@ -309,7 +341,7 @@ public class HeapPage implements Page {
     public TransactionId isDirty() {
         // some code goes here
         // Not necessary for lab1
-        return null;
+        return lastDirtyOperation;
     }
 
     /**

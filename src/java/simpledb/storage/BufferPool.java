@@ -212,7 +212,10 @@ public class BufferPool {
         throws DbException, IOException, TransactionAbortedException {
         // some code goes here
         // not necessary for lab1
-        DbFile dbFile = Database.getCatalog().getDatabaseFile(t.getRecordId().getPageId().getTableId());
+        int tableId = t.getRecordId().getPageId().getTableId();
+
+        DbFile dbFile = Database.getCatalog().getDatabaseFile(tableId);
+
         List<Page> pages = dbFile.deleteTuple(tid, t);
         for (Page page:pages) {
             page.markDirty(true,tid);
