@@ -66,4 +66,5 @@ public class DeleteTest extends FilterBase {
     public static junit.framework.Test suite() {
         return new junit.framework.JUnit4TestAdapter(DeleteTest.class);
     }
+
 }

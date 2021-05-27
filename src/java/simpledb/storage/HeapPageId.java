@@ -60,8 +60,8 @@ public class HeapPageId implements PageId {
         if (o == this) {
             return true;
         }
-        if (o instanceof PageId) {
-            PageId another = (PageId) o;
+        if (o instanceof HeapPageId) {
+            HeapPageId another = (HeapPageId) o;
             return this.pgNo == another.getPageNumber()
                     && this.tableId == another.getTableId();
         } else return false;

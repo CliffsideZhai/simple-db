@@ -117,7 +117,7 @@ public class HeapPage implements Page {
      */
     private int getHeaderSize() {
         // some code goes here
-        return (int) ((int) (getNumTuples()+7)/(8.0));
+        return (getNumTuples()+7)/(8);
                  
     }
     
@@ -286,20 +286,34 @@ public class HeapPage implements Page {
         // some code goes here
         // not necessary for lab1
         // Done
-        if (pid.equals(t.getRecordId().getPageId())) {
-            int tupleno = t.getRecordId().getTupleNumber();
-
-            if (tupleno >= 0 && tupleno < numSlots) {
-                if (isSlotUsed(tupleno)) {
-                    tuples[tupleno] = null;
-                    markSlotUsed(tupleno, false);
+//        if (pid.equals(t.getRecordId().getPageId())) {
+//            int tupleno = t.getRecordId().getTupleNumber();
+//
+//            if (tupleno >= 0 && tupleno < numSlots) {
+//                if (isSlotUsed(tupleno)) {
+//                    markSlotUsed(tupleno, false);
+//                    tuples[tupleno] = null;
+//                    return;
+//                } else {
+//                    throw new DbException("deletion on empty slot");
+//                }
+//            }
+//        }
+//        throw new DbException("tuple not on the page");
+        assert t != null;
+        RecordId recToDelete = t.getRecordId();
+        if (recToDelete != null && pid.equals(recToDelete.getPageId())) {
+            for (int i = 0; i < numSlots; i++) {
+                if (isSlotUsed(i) && t.getRecordId().equals(tuples[i].getRecordId())) {
+                    markSlotUsed(i, false);
+                    // t.setRecordId(null);
+                    tuples[i] = null;
                     return;
-                } else {
-                    throw new DbException("deletion on empty slot");
                 }
             }
+            throw new DbException("deleteTuple: Error: tuple slot is empty");
         }
-        throw new DbException("tuple not on the page");
+        throw new DbException("deleteTuple: Error: tuple is not on this page");
     }
 
     /**
@@ -312,17 +326,34 @@ public class HeapPage implements Page {
     public void insertTuple(Tuple t) throws DbException {
         // some code goes here
         // not necessary for lab1
-
-//        throw new DbException("insertTuple: no empty slots or tupledesc is mismatch");
-        for (int i=0; i<numSlots; i++) {
-            if (!isSlotUsed(i)) {
-                t.setRecordId(new RecordId(pid, i));
-                tuples[i] = t;
-                markSlotUsed(i, true);
-                return;
+//        assert t != null;
+////        throw new DbException("insertTuple: no empty slots or tupledesc is mismatch");
+//        if (!td.equals(t.getTupleDesc())){
+//            return;
+//        }
+//        for (int i=0; i<numSlots; i++) {
+//            if (!isSlotUsed(i)) {
+//                markSlotUsed(i, true);
+//                t.setRecordId(new RecordId(pid, i));
+//                tuples[i] = t;
+//                return;
+//            }
+//        }
+//        throw new DbException("insertion on full page");
+        assert t != null;
+        if (td.equals(t.getTupleDesc())) {
+            for (int i = 0; i < numSlots; i++) {
+                if (!isSlotUsed(i)) {
+                    // insert and update header
+                    markSlotUsed(i, true);
+                    t.setRecordId(new RecordId(pid, i));
+                    tuples[i] = t;
+                    return;
+                }
             }
+            throw new DbException("insertTuple: ERROR: no tuple is inserted");
         }
-        throw new DbException("insertion on full page");
+        throw new DbException("insertTuple: no empty slots or tupledesc is mismatch");
     }
 
     /**
@@ -332,7 +363,7 @@ public class HeapPage implements Page {
     public void markDirty(boolean dirty, TransactionId tid) {
         // some code goes here
         // not necessary for lab1
-        lastDirtyOperation = dirty ? tid : null;
+        lastDirtyOperation = dirty ==true ? tid : null;
     }
 
     /**
@@ -412,6 +443,7 @@ public class HeapPage implements Page {
         @Override
         public boolean hasNext() {
             return index < getNumTuples() && pos < usedTuplesNum;
+            //return index < getNumTuples() && pos<getNumTuples();
         }
 
         @Override
@@ -425,6 +457,33 @@ public class HeapPage implements Page {
             return tuples[index++];
         }
     }
+    protected class HeapPageTupleIterator2 implements Iterator<Tuple> {
+        private final Iterator<Tuple> iter;
+        public HeapPageTupleIterator2() {
+            ArrayList<Tuple> tupleArrayList = new ArrayList<Tuple>(numSlots);
+            for (int i = 0; i < numSlots; i++) {
+                if (isSlotUsed(i)) {
+                    tupleArrayList.add(i, tuples[i]);
+                }
+            }
+            iter = tupleArrayList.iterator();
+        }
+
+        @Override
+        public void remove() {
+            throw new UnsupportedOperationException("TupleIterator: remove not supported");
+        }
+
+        @Override
+        public boolean hasNext() {
+            return iter.hasNext();
+        }
+
+        @Override
+        public Tuple next() {
+            return iter.next();
+        }
+    }
     /**
      * @return an iterator over all tuples on this page (calling remove on this iterator throws an UnsupportedOperationException)
      * (note that this iterator shouldn't return tuples in empty slots!)
@@ -432,7 +491,7 @@ public class HeapPage implements Page {
     public Iterator<Tuple> iterator() {
         // some code goes here
         // Done
-        return new HeapPageTupleIterator();
+        return new HeapPageTupleIterator2();
     }
 
 }

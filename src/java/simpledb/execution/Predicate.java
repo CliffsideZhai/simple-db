@@ -116,11 +116,7 @@ public class Predicate implements Serializable {
     public boolean filter(Tuple t) {
         // some code goes here
         //get comparedField
-        if (t != null){
-            Field fieldToCom = t.getField(this.field);
-            return fieldToCom.compare(this.op, this.operand);
-        }
-        return false;
+        return t.getField(field).compare(op, operand);
     }
 
     /**

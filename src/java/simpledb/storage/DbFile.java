@@ -62,7 +62,7 @@ public interface DbFile {
      *   of the file
      */
     List<Page> deleteTuple(TransactionId tid, Tuple t)
-        throws DbException, IOException, TransactionAbortedException;
+        throws DbException, TransactionAbortedException, IOException;
 
     /**
      * Returns an iterator over all the tuples stored in this DbFile. The

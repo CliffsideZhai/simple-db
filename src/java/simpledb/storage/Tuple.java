@@ -1,10 +1,7 @@
 package simpledb.storage;
 
-//import simpledb.myStorage.myTupleDesc;
 
 import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 
@@ -33,7 +30,6 @@ public class Tuple implements Serializable {
     public Tuple(TupleDesc td) {
         // some code goes here
         resetTupleDesc(td);
-        fields = new Field[td.numFields()];
     }
 
     /**
@@ -155,5 +151,8 @@ public class Tuple implements Serializable {
         // some code goes here
         this.tupleDesc =td;
         this.fields = new Field[td.numFields()];
+        for (int i = 0; i < td.numFields(); i++) {
+            fields[i] = null;
+        }
     }
 }

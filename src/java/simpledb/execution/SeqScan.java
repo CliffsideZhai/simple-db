@@ -36,7 +36,9 @@ public class SeqScan implements OpIterator {
 
     private DbFileIterator dbfileIterator;
 
-    private TupleDesc td;
+    private DbFile dbFile;
+
+    //private TupleDesc td;
     /**
      * Creates a sequential scan over the specified table as a part of the
      * specified transaction.
@@ -58,6 +60,7 @@ public class SeqScan implements OpIterator {
         this.tid =tid;
         this.tableid = tableid;
         this.tableAlias = tableAlias;
+        this.dbFile = Database.getCatalog().getDatabaseFile(tableid);
 
         this.dbfileIterator = Database.getCatalog().getDatabaseFile(tableid).iterator(tid);
 
@@ -121,8 +124,7 @@ public class SeqScan implements OpIterator {
      *         prefixed with the tableAlias string from the constructor.
      */
     public TupleDesc getTupleDesc() {
-        // some code goes here
-//        final TupleDesc tupleDesc = Database.getCatalog().getTupleDesc(tableid);
+//        final TupleDesc tupleDesc = dbFile.getTupleDesc();
 //        Type[] types = new Type[tupleDesc.numFields()];
 //        String[] fields = new String[tupleDesc.numFields()];
 //        String prefix = "";
@@ -142,22 +144,42 @@ public class SeqScan implements OpIterator {
 //            fields[i] = s;
 //        }
 //        return new TupleDesc(types,fields);
-        if (td != null) {
-            return td;
+//        if (td != null) {
+//            return td;
+//        }
+//        TupleDesc desc = Database.getCatalog().getTupleDesc(tableid);
+//        int fieldNum = desc.numFields();
+//        Type[] types = new Type[fieldNum];
+//        String[] names = new String[fieldNum];
+//        for (int i = 0; i < fieldNum; i++) {
+//            types[i] = desc.getFieldType(i);
+//            //按照构造器中所说，为了防止意外的null值使此类停止工作，故要加入一些判断
+//            /*String prefix = getAlias() == null ? "null." : getAlias() + ".";*/
+//            String prefix = getAlias() == null ? "null" : getAlias() + "";
+//            String fieldName = desc.getFieldName(i);
+//            fieldName = fieldName == null ? "null" : fieldName;
+//            names[i] = prefix + fieldName;
+//        }
+//        return new TupleDesc(types, names);
+
+        final TupleDesc td = dbFile.getTupleDesc();
+        Type[] typeAr = new Type[td.numFields()];
+        String[] fieldAr = new String[td.numFields()];
+
+        String prefix = "null";
+        if (tableAlias != null) {
+            prefix = tableAlias;
         }
-        TupleDesc desc = Database.getCatalog().getTupleDesc(tableid);
-        int fieldNum = desc.numFields();
-        Type[] types = new Type[fieldNum];
-        String[] names = new String[fieldNum];
-        for (int i = 0; i < fieldNum; i++) {
-            types[i] = desc.getFieldType(i);
-            //按照构造器中所说，为了防止意外的null值使此类停止工作，故要加入一些判断
-            String prefix = getAlias() == null ? "null." : getAlias() + ".";
-            String fieldName = desc.getFieldName(i);
-            fieldName = fieldName == null ? "null" : fieldName;
-            names[i] = prefix + fieldName;
+
+        for (int i = 0; i < td.numFields(); i++) {
+            typeAr[i] = td.getFieldType(i);
+            String fieldName = td.getFieldName(i);
+            if (fieldName == null) {
+                fieldName = "null";
+            }
+            fieldAr[i] = prefix + "." + fieldName;
         }
-        return new TupleDesc(types, names);
+        return new TupleDesc(typeAr, fieldAr);
     }
 
     public boolean hasNext() throws TransactionAbortedException, DbException {
@@ -169,7 +191,7 @@ public class SeqScan implements OpIterator {
             TransactionAbortedException, DbException {
         // some code goes here
         Tuple old=dbfileIterator.next();
-        return transTd(old);
+        return old;
     }
 
     /**

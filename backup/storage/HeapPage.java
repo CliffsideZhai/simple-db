@@ -4,6 +4,7 @@ import simpledb.common.Catalog;
 import simpledb.common.Database;
 import simpledb.common.DbException;
 import simpledb.storage.BufferPool;
+import simpledb.storage.RecordId;
 import simpledb.storage.Tuple;
 import simpledb.storage.TupleDesc;
 import simpledb.storage.*;
@@ -132,7 +133,7 @@ public class HeapPage implements Page {
     /**
      * Suck up tuples from the source file.
      */
-    private simpledb.storage.Tuple readNextTuple(DataInputStream dis, int slotId) throws NoSuchElementException {
+    private Tuple readNextTuple(DataInputStream dis, int slotId) throws NoSuchElementException {
         // if associated bit is not set, read forward to the next tuple, and
         // return null.
         if (!isSlotUsed(slotId)) {
@@ -256,40 +257,26 @@ public class HeapPage implements Page {
      *         already empty.
      * @param t The tuple to delete
      */
-    public void deleteTuple(simpledb.storage.Tuple t) throws DbException {
+    public void deleteTuple(Tuple t) throws DbException {
         // some code goes here
         // not necessary for lab1
-//
-//        assert t!=null;
-//        RecordId recordId = t.getRecordId();
-//        PageId pageId = recordId.getPageId();
-//
-//        if (recordId!=null && pid.equals(pageId)){
-//            for (int i = 0; i < numSlots; i++) {
-//                if (isSlotUsed(i)&&tuples[i].getRecordId().equals(recordId)){
-//                    markSlotUsed(i,false);
-//                    tuples[i] = null;
-//                    return;
-//                }
-//            }
-//            throw new DbException("deleteTuple: Error: tuple slot is empty");
-//        }
-//        throw new DbException("deleteTuple: Error: tuple is not on this page");
-        // Done
-        if (pid.equals(t.getRecordId().getPageId())) {
-            int tupleno = t.getRecordId().getTupleNumber();
 
-            if (tupleno >= 0 && tupleno < numSlots) {
-                if (isSlotUsed(tupleno)) {
-                    tuples[tupleno] = null;
-                    markSlotUsed(tupleno, false);
+        assert t!=null;
+        RecordId recordId = t.getRecordId();
+        PageId pageId = recordId.getPageId();
+
+        if (recordId!=null && pid.equals(pageId)){
+            for (int i = 0; i < numSlots; i++) {
+                if (isSlotUsed(i)&&tuples[i].getRecordId().equals(recordId)){
+                    markSlotUsed(i,false);
+                    tuples[i] = null;
                     return;
-                } else {
-                    throw new DbException("deletion on empty slot");
                 }
             }
+            throw new DbException("deleteTuple: Error: tuple slot is empty");
         }
-        throw new DbException("tuple not on the page");
+        throw new DbException("deleteTuple: Error: tuple is not on this page");
+
     }
 
     /**

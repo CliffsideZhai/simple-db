@@ -6,6 +6,7 @@ import simpledb.common.DbException;
 import simpledb.storage.Tuple;
 import simpledb.storage.TupleDesc;
 
+import java.io.IOException;
 import java.util.*;
 
 /**
@@ -15,7 +16,7 @@ public class Filter extends Operator {
 
     private static final long serialVersionUID = 1L;
 
-    private Predicate p;
+    private final Predicate p;
     private OpIterator child;
 
     //缓存过滤结果，加快hasNext和next方法
@@ -23,7 +24,7 @@ public class Filter extends Operator {
     /**
      * Constructor accepts a predicate to apply and a child operator to read
      * tuples to filter from.
-     * 
+     *
      * @param p
      *            The predicate to filter tuples with
      * @param child
@@ -79,7 +80,7 @@ public class Filter extends Operator {
      * AbstractDbIterator.readNext implementation. Iterates over tuples from the
      * child operator, applying the predicate to them and returning those that
      * pass the predicate (i.e. for which the Predicate.filter() returns true.)
-     * 
+     *
      * @return The next tuple that passes the filter, or null if there are no
      *         more tuples
      * @see Predicate#filter
