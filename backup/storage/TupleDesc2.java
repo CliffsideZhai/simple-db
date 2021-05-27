@@ -23,7 +23,7 @@ public class TupleDesc implements Serializable {
         private static final long serialVersionUID = 1L;
 
         /**
-         * The type of the field
+         * The type of the fieldc
          * */
         public final Type fieldType;
 
