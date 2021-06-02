@@ -1,11 +1,14 @@
 package simpledb.optimizer;
 
 import simpledb.common.Database;
+import simpledb.common.DbException;
 import simpledb.common.Type;
 import simpledb.execution.Predicate;
 import simpledb.execution.SeqScan;
 import simpledb.storage.*;
 import simpledb.transaction.Transaction;
+import simpledb.transaction.TransactionAbortedException;
+import simpledb.transaction.TransactionId;
 
 import java.util.HashMap;
 import java.util.Iterator;
@@ -14,8 +17,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
 /**
- * TableStats represents statistics (e.g., histograms) about base tables in a
- * query. 
+ * TableStats represents statistics (e.g., histograms) about base tables in a query.
  * 
  * This class is not needed in implementing lab1 and lab2.
  */
@@ -26,10 +28,12 @@ public class TableStats {
     static final int IOCOSTPERPAGE = 1000;
 
     public static TableStats getTableStats(String tablename) {
+
         return statsMap.get(tablename);
     }
 
     public static void setTableStats(String tablename, TableStats stats) {
+
         statsMap.put(tablename, stats);
     }
     
@@ -69,6 +73,25 @@ public class TableStats {
     static final int NUM_HIST_BINS = 100;
 
     /**
+     * 表中的tuple个数
+     */
+    private int ntups;
+    /**
+     * 表中存在的属性fields 个数
+     */
+    private int nfields;
+    /**
+     * number pages;
+     */
+    private int npages;
+    private int ioCostPerPage;
+
+    private Object[] HisStats;
+
+    private int[] maxs;
+    private int[] mins;
+
+    /**
      * Create a new TableStats object, that keeps track of statistics on each
      * column of a table
      * 
@@ -87,6 +110,87 @@ public class TableStats {
         // necessarily have to (for example) do everything
         // in a single scan of the table.
         // some code goes here
+        this.ioCostPerPage = ioCostPerPage;
+        TransactionId tid = new TransactionId();
+        SeqScan seqScan = new SeqScan(tid, tableid, "");
+
+        this.nfields = seqScan.getTupleDesc().numFields();
+        HeapFile heapFile = (HeapFile) Database.getCatalog().getDatabaseFile(tableid);
+        this.npages = heapFile.numPages();
+        /**
+         * 获取每个filed的最大值，构成一个数组
+         */
+        maxs = new int[this.nfields];
+        /**
+         * 获取每个filed的最小值，构成一个数组
+         */
+        mins = new int[this.nfields];
+        // unsafe should convert based on type
+        /**
+         * 每个filed对应的统计直方图结果
+         */
+        this.HisStats = new Object[this.nfields];
+
+        for (int i = 0; i < nfields; i++) {
+            maxs[i] = Integer.MIN_VALUE;
+            mins[i] = Integer.MAX_VALUE;
+        }
+
+        Scan(seqScan);
+    }
+
+    private void Scan(SeqScan seqScan){
+        try {
+            seqScan.open();
+            // scan and updating min and max for intField
+            while (seqScan.hasNext()){
+                this.ntups ++;
+                Tuple next = seqScan.next();
+                /** 遍历一遍tuple里的每个属性，如果出现有*/
+                for (int i = 0; i < nfields; i++) {
+                    if (next.getField(i).compare(Predicate.Op.GREATER_THAN,new IntField(maxs[i]))){
+                        maxs[i] = ((IntField)(next.getField(i))).getValue();
+                        //System.out.println("maxs update is"+maxs[i]);
+                    }
+                    if (next.getField(i).compare(Predicate.Op.LESS_THAN, new IntField(mins[i]))) {
+                        mins[i] = ((IntField) next.getField(i)).getValue();
+                        //System.out.println("minx update is"+ mins[i]);
+                    }
+                }
+            }
+
+
+            for (int i = 0; i < nfields; ++i) {
+                if (seqScan.getTupleDesc().getFieldType(i) == Type.INT_TYPE) {
+                    HisStats[i] = new IntHistogram(NUM_HIST_BINS, mins[i], maxs[i]);
+                } else {
+                    // String type
+                    HisStats[i] = new StringHistogram(NUM_HIST_BINS);
+                }
+            }
+
+            seqScan.rewind();
+
+            /* 重新扫描一遍，给每个tuple的每个filed对应的直方图上增加数据 */
+            while (seqScan.hasNext()) {
+                Tuple next = seqScan.next();
+                for (int i = 0; i < nfields; ++i) {
+                    if (next.getField(i).getType() == Type.INT_TYPE) {
+                        ((IntHistogram) HisStats[i]).addValue(((IntField) next.getField(i)).getValue());
+                    } else {
+                        // string type
+                        ((StringHistogram) HisStats[i]).addValue(((StringField) next.getField(i)).getValue());
+                    }
+                }
+            }
+        } catch (DbException e) {
+            e.printStackTrace();
+        } catch (TransactionAbortedException e) {
+            e.printStackTrace();
+        }finally {
+            seqScan.close();
+        }
+
     }
 
     /**
@@ -103,7 +207,7 @@ public class TableStats {
      */
     public double estimateScanCost() {
         // some code goes here
-        return 0;
+        return npages * ioCostPerPage;
     }
 
     /**
@@ -117,7 +221,7 @@ public class TableStats {
      */
     public int estimateTableCardinality(double selectivityFactor) {
         // some code goes here
-        return 0;
+        return (int) (selectivityFactor * ntups);
     }
 
     /**
@@ -150,7 +254,16 @@ public class TableStats {
      */
     public double estimateSelectivity(int field, Predicate.Op op, Field constant) {
         // some code goes here
-        return 1.0;
+        if (constant.getType() == Type.INT_TYPE){
+            IntHistogram intHistogram = (IntHistogram)HisStats[field];
+            double v = intHistogram.estimateSelectivity(op, ((IntField) constant).getValue());
+            return v;
+        }else {
+            StringHistogram stringHistogram = (StringHistogram)HisStats[field];
+            double v = stringHistogram.estimateSelectivity(op, ((StringField) constant).getValue());
+            return v;
+        }
+        //return 1.0;
     }
 
     /**
@@ -158,7 +271,7 @@ public class TableStats {
      * */
     public int totalTuples() {
         // some code goes here
-        return 0;
+        return ntups;
     }
 
 }
