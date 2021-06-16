@@ -799,7 +799,7 @@ public class BTreeFile implements DbFile {
 	 * @see #handleMinOccupancyPage(TransactionId, Map, BTreePage)
 	 */
 	public List<Page> deleteTuple(TransactionId tid, Tuple t)
-			throws DbException, IOException, TransactionAbortedException {
+			throws DbException, TransactionAbortedException, IOException {
 		Map<PageId, Page> dirtypages = new HashMap<>();
 
 		BTreePageId pageId = new BTreePageId(tableid, t.getRecordId().getPageId().getPageNumber(),

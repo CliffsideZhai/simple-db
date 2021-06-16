@@ -1,4 +1,4 @@
-package simpledb.storage;
+package simpledb.storage.cache;
 
 import java.util.Iterator;
 import java.util.NoSuchElementException;
@@ -11,7 +11,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class LruCache<K,V>{
 
-    private class Node{
+    protected class Node{
         Node front;
         Node next;
         K key;
@@ -25,16 +25,16 @@ public class LruCache<K,V>{
     /**
      * 当前缓存
      */
-    private ConcurrentHashMap<K,Node> cacheEntries;
+    protected ConcurrentHashMap<K,Node> cacheEntries;
 
     /**
      * 允许缓存
      */
-    private int capacity;
+    protected int capacity;
 
-    private Node head;
+    protected Node head;
 
-    private Node tail;
+    protected Node tail;
 
     public LruCache(int capacity) {
         this.capacity = capacity;
@@ -46,7 +46,7 @@ public class LruCache<K,V>{
      * 删除结点
      * @param ruNode the recently used Node
      */
-    private void unlink(Node ruNode) {
+    protected void unlink(Node ruNode) {
         //如果是最后一个结点
         if (ruNode.next == null) {
             ruNode.front.next = null;
@@ -60,7 +60,7 @@ public class LruCache<K,V>{
      * 讲最近使用的节点，添加到头结点
      * @param ruNode 最近使用的节点
      */
-    private void linkFirst(Node ruNode){
+    protected void linkFirst(Node ruNode){
         Node oldHead = this.head.next;
         this.head.next = ruNode;
         ruNode.next = oldHead;
@@ -75,7 +75,7 @@ public class LruCache<K,V>{
      * 删除链表的最后一个元素
      * @return  返回被删除的元素
      */
-    private K removeTail() {
+    protected K removeTail() {
         K element=tail.key;
         Node newTail = tail.front;
         tail.front=null;
@@ -90,7 +90,7 @@ public class LruCache<K,V>{
      * @param value
      * @return     被删除出缓存的条目，如果没有，返回null
      */
-    public V put(K key, V value) {
+    public V put(K key, V value) throws CacheException {
         if (key == null | value == null) {//不允许插入null值
             throw new IllegalArgumentException();
         }
@@ -144,7 +144,7 @@ public class LruCache<K,V>{
         return new LruIter();
     }
 
-    private class LruIter implements Iterator<V> {
+    protected class LruIter implements Iterator<V> {
         Node n = head;
 
         @Override

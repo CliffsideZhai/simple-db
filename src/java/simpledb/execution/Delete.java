@@ -88,11 +88,7 @@ public class Delete extends Operator {
             BufferPool bufferPool = Database.getBufferPool();
             Tuple next = child.next();
 
-            try {
-                bufferPool.deleteTuple(tid,next);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+            bufferPool.deleteTuple(tid,next);
 
             count++;
 

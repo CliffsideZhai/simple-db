@@ -11,6 +11,7 @@ import simpledb.systemtest.SimpleDbTestBase;
 import simpledb.index.BTreeUtility.BTreeWriter;
 import simpledb.execution.Predicate.Op;
 
+import java.io.IOException;
 import java.util.*;
 
 import org.junit.After;
@@ -35,7 +36,7 @@ public class BTreeNextKeyLockingTest extends SimpleDbTestBase {
 	}
 
 	@After
-	public void tearDown() {
+	public void tearDown() throws IOException {
 		Database.getBufferPool().transactionComplete(tid);
 	}
 

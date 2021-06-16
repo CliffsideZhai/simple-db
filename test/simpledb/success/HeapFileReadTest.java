@@ -11,6 +11,7 @@ import simpledb.systemtest.SimpleDbTestBase;
 import simpledb.systemtest.SystemTestUtil;
 import simpledb.transaction.TransactionId;
 
+import java.io.IOException;
 import java.util.NoSuchElementException;
 
 import static org.junit.Assert.*;
@@ -24,14 +25,14 @@ public class HeapFileReadTest extends SimpleDbTestBase {
      * Set up initial resources for each unit test.
      */
     @Before
-    public void setUp() throws Exception {
+    public void setUp() throws IOException {
         hf = SystemTestUtil.createRandomHeapFile(2, 20, null, null);
         td = Utility.getTupleDesc(2);
         tid = new TransactionId();
     }
 
     @After
-    public void tearDown() {
+    public void tearDown() throws IOException {
         Database.getBufferPool().transactionComplete(tid);
     }
 

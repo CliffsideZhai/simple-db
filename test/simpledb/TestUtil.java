@@ -345,7 +345,9 @@ public class TestUtil {
                     error = e;
                 }
 
+
                 Database.getBufferPool().transactionComplete(tid, false);
+
             }
         }
 

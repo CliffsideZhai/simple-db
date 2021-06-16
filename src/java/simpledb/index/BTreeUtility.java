@@ -538,6 +538,7 @@ public class BTreeUtility {
 
 				Database.getBufferPool().transactionComplete(tid, false);
 
+
 			}
 		}
 
@@ -620,7 +621,9 @@ public class BTreeUtility {
 					error = e;
 				}
 
+
 				Database.getBufferPool().transactionComplete(tid, false);
+
 
 			}
 		}
@@ -690,7 +693,8 @@ public class BTreeUtility {
 				}
 
 
-					Database.getBufferPool().transactionComplete(tid, false);
+				Database.getBufferPool().transactionComplete(tid, false);
+
 
 			}
 		}
@@ -786,13 +790,15 @@ public class BTreeUtility {
 					error = e;
 				}
 
+
 				try {
 					insertedTuples.put(tuple);
-					Database.getBufferPool().transactionComplete(tid, false);
-				} catch (InterruptedException  e2) {
-					e2.printStackTrace();
+				} catch (InterruptedException interruptedException) {
+					interruptedException.printStackTrace();
 				}
-            }
+				Database.getBufferPool().transactionComplete(tid, false);
+
+			}
 		}
 		
 		private void init(BTreeFile bf, BlockingQueue<List<Integer>> insertedTuples) {
