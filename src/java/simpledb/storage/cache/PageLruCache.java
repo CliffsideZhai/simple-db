@@ -1,64 +1,66 @@
 package simpledb.storage.cache;
 
 import simpledb.common.Database;
-import simpledb.storage.HeapFile;
-import simpledb.storage.HeapPage;
-import simpledb.storage.Page;
-import simpledb.storage.PageId;
+import simpledb.storage.*;
 
-public class BufferCache extends LruCache<PageId, Page>{
-    public BufferCache(int capacity) {
+import java.io.IOException;
+
+public class PageLruCache extends LruCache<PageId, Page> {
+
+    public PageLruCache(int capacity) {
         super(capacity);
     }
 
     @Override
-    public synchronized Page put(PageId key, Page value) throws CacheException {
-        if (key == null || value == null){
+    public synchronized Page put(PageId key, Page value) throws CacheException{
+        if (key == null | value == null) {//不允许插入null值
             throw new IllegalArgumentException();
         }
-
-        if (isCached(key)){
-            Node node = cacheEntries.get(key);
-            node.value = value;
-            unlink(node);
-            linkFirst(node);
+        if (isCached(key)) {
+            //该结点存在于cache中，则更新其值，然后调整最近使用的条目，返回null(因为没有被删除的条目)
+            Node ruNode = cacheEntries.get(key);
+            ruNode.value = value;
+            unlink(ruNode);
+            linkFirst(ruNode);
             return null;
-        }else {
+        } else {
             //不存在的话先判断是否已经达到容量
             //如果到达容量，判断尾节点是否是dirty的page，如果是则取其前一个page
             //否则先删除尾结点最后将其返回
             //未到达容量的话只需要新建结点，然后插入到表头，返回null
             Page removed = null;
-
-            if (cacheEntries.size() == capacity){
+            if (cacheEntries.size() == capacity) {
                 Page toRemoved = null;
-                Node nowTail = tail;
-                while ((toRemoved = nowTail.value).isDirty() !=null){
-                    nowTail = nowTail.front;
-                    if (nowTail == head){
-
-                        throw new CacheException(
-                                "Page Cache is full and all pages in cache are dirty, not supported to put now");
+                Node n = tail;
+                while ((toRemoved = n.value).isDirty() != null) {
+                    n = n.front;
+                    if (n == head){
+                        try {
+                            Database.getBufferPool().flushAllPages();
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                        throw new CacheException("Page Cache is full and all pages in cache are dirty, not supported to put now");
                     }
                 }
-
                 //在链表中删除该node,以及缓存中删除page
                 removePage(toRemoved.getId());
                 removed = cacheEntries.remove(toRemoved.getId()).value;
             }
-
-            Node node = new Node(key, value);
-            linkFirst(node);
-            cacheEntries.put(key,node);
+            Node ruNode = new Node(key, value);
+            linkFirst(ruNode);
+            cacheEntries.put(key, ruNode);
             return removed;
         }
     }
+
+
     /**
      * 删除cache中pageId对应的page
      *
      * @param pid
      */
-    public synchronized void removePage(PageId pid){
+    public synchronized void removePage(PageId pid) {
         if (!isCached(pid)) {
             throw new IllegalArgumentException();
         }
@@ -100,5 +102,4 @@ public class BufferCache extends LruCache<PageId, Page>{
             tail = node;
         }
     }
-
 }

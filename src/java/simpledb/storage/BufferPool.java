@@ -4,9 +4,12 @@ import simpledb.common.Database;
 import simpledb.common.Permissions;
 import simpledb.common.DbException;
 import simpledb.storage.cache.BufferCache;
-import simpledb.storage.cache.LruCache;
+import simpledb.storage.cache.PageLruCache;
+import simpledb.storage.lock.LockManager;
 import simpledb.transaction.TransactionAbortedException;
 import simpledb.transaction.TransactionId;
+
+import java.awt.font.ShapeGraphicAttribute;
 import java.io.*;
 
 import java.util.*;
@@ -50,10 +53,16 @@ public class BufferPool {
      * set map connections
      * 缓存
      */
-    private LruCache<PageId, Page> bufferPool ;
+    //private BufferCache bufferPool ;
 
+    private PageLruCache bufferPool   ;
+    //锁管理器
+    private final LockManager lockManager;
 
-    public LruCache<PageId, Page> getBufferPool() {
+    //事务获取不到锁时需要等待，由于实际用的是sleep来体现等待，此处参数是sleep的时间
+    private final long SLEEP_INTERVAL;
+
+    public PageLruCache getBufferPool() {
         return bufferPool;
     }
 
@@ -69,8 +78,11 @@ public class BufferPool {
     public BufferPool(int numPages) {
         // some code goes here
         this.numberPage = numPages;
-        this.bufferPool = new BufferCache(numPages);
+        this.bufferPool = new PageLruCache(numPages);
 
+        lockManager = new LockManager();
+        //太小会造成忙碌的查询死锁，太大会浪费等待时间
+        SLEEP_INTERVAL = 500;
     }
 
     public static int getPageSize() {
@@ -107,13 +119,29 @@ public class BufferPool {
         // some code goes here
         //if it is present
 
-        /**
-         * 如果是只讀權限，使用排他鎖
-         */
-        Page page = null;
-        if ((page = this.bufferPool.get(pid))!=null){
+        boolean result = (perm == Permissions.READ_ONLY) ? lockManager.grantSLock(tid, pid)
+                : lockManager.grantXLock(tid, pid);
+        //下面的while循环就是在模拟等待过程，隔一段时间就检查一次是否申请到锁了，还没申请到就检查是否陷入死锁
+        while (!result) {
+            if (lockManager.deadlockOccurred(tid, pid)) {
+                throw new TransactionAbortedException();
+            }
+            try {
+                Thread.sleep(SLEEP_INTERVAL);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            //sleep之后再次判断result
+            result = (perm == Permissions.READ_ONLY) ? lockManager.grantSLock(tid, pid)
+                    : lockManager.grantXLock(tid, pid);
+        }
+
+        HeapPage page = (HeapPage) bufferPool.get(pid);
+        if (page!=null){
+            //緩存 命中
             return page;
         }
+
         HeapFile table = (HeapFile) Database.getCatalog().getDatabaseFile(pid.getTableId());
         HeapPage newPage = (HeapPage) table.readPage(pid);
         //addNewPage(pid, newPage);
@@ -138,10 +166,14 @@ public class BufferPool {
      * @param tid the ID of the transaction requesting the unlock
      * @param pid the ID of the page to unlock
      */
-    public  void unsafeReleasePage(TransactionId tid, PageId pid) {
+    public synchronized void unsafeReleasePage(TransactionId tid, PageId pid) {
         // some code goes here
         // not necessary for lab1|lab2
-
+        if (!lockManager.unlock(tid, pid)) {
+            //pid does not locked by any transaction
+            //or tid  dose not lock the page pid
+            throw new IllegalArgumentException();
+        }
 
     }
 
@@ -150,17 +182,18 @@ public class BufferPool {
      *
      * @param tid the ID of the transaction requesting the unlock
      */
-    public void transactionComplete(TransactionId tid) {
+    public synchronized void transactionComplete(TransactionId tid) {
         // some code goes here
         // not necessary for lab1|lab2
         //transactionComplete(tid,true);
+        transactionComplete(tid, true);
     }
 
     /** Return true if the specified transaction has a lock on the specified page */
     public boolean holdsLock(TransactionId tid, PageId p) {
         // some code goes here
         // not necessary for lab1|lab2
-        return false;
+        return lockManager.getLockState(tid, p) != null;
     }
 
     /**
@@ -170,12 +203,31 @@ public class BufferPool {
      * @param tid the ID of the transaction requesting the unlock
      * @param commit a flag indicating whether we should commit or abort
      */
-    public void transactionComplete(TransactionId tid, boolean commit) {
+    public synchronized void transactionComplete(TransactionId tid, boolean commit) {
         // some code goes here
         // not necessary for lab1|lab2
-
+        lockManager.releaseTransactionLocks(tid);
+        if (commit) {
+            flushPages(tid);
+        } else {
+            revertTransactionAction(tid);
+        }
     }
 
+    /**
+     * 在事务回滚时，撤销该事务对page造成的改变
+     *
+     * @param tid
+     */
+    public synchronized void revertTransactionAction(TransactionId tid) {
+        Iterator<Page> it = bufferPool.iterator();
+        while (it.hasNext()) {
+            Page p = it.next();
+            if (p.isDirty() != null && p.isDirty().equals(tid)) {
+                bufferPool.reCachePage(p.getId());
+            }
+        }
+    }
     /**
      * Add a tuple to the specified table on behalf of transaction tid.  Will
      * acquire a write lock on the page the tuple is added to and any other
@@ -250,7 +302,10 @@ public class BufferPool {
         // not necessary for lab1
         Iterator<Page> it = bufferPool.iterator();
         while (it.hasNext()) {
-            flushPage(it.next().getId());
+            Page p = it.next();
+            if (p.isDirty() != null) {
+                flushPage(p.getId());
+            }
         }
     }
 
@@ -266,6 +321,7 @@ public class BufferPool {
         // some code goes here
         // not necessary for lab1
         //bufferPool.removePage(pid);
+        bufferPool.removePage(pid);
     }
 
     /**
@@ -284,10 +340,23 @@ public class BufferPool {
 
     /** Write all pages of the specified transaction to disk.
      */
-    public synchronized  void flushPages(TransactionId tid) throws IOException {
+    public synchronized  void flushPages(TransactionId tid){
         // some code goes here
         // not necessary for lab1|lab2
-
+        Iterator<Page> it = bufferPool.iterator();
+        while (it.hasNext()) {
+            Page p = it.next();
+            if (p.isDirty() != null && p.isDirty().equals(tid)) {
+                try {
+                    flushPage(p.getId());
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+                if (p.isDirty() == null) {
+                    p.setBeforeImage();
+                }
+            }
+        }
 
     }
 
@@ -295,6 +364,7 @@ public class BufferPool {
      * Discards a page from the buffer pool.
      * Flushes the page to disk to ensure dirty pages are updated on disk.
      */
+    @Deprecated
     private synchronized  void evictPage() throws DbException {
         // some code goes here
         // not necessary for lab1

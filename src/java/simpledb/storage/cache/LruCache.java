@@ -1,5 +1,6 @@
 package simpledb.storage.cache;
 
+import java.io.IOException;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.concurrent.ConcurrentHashMap;
@@ -90,7 +91,7 @@ public class LruCache<K,V>{
      * @param value
      * @return     被删除出缓存的条目，如果没有，返回null
      */
-    public V put(K key, V value) throws CacheException {
+    public synchronized V put(K key, V value) throws CacheException, IOException {
         if (key == null | value == null) {//不允许插入null值
             throw new IllegalArgumentException();
         }
@@ -122,7 +123,7 @@ public class LruCache<K,V>{
      * @param key
      * @return  返回存在与缓存中的条目，不存在则返回null
      */
-    public V get(K key) {
+    public synchronized V get(K key) {
         if (isCached(key)) {
             //调整最近使用的条目
             Node ruNode = cacheEntries.get(key);
@@ -132,7 +133,7 @@ public class LruCache<K,V>{
         }
         return null;
     }
-    public boolean isCached(K key) {
+    public synchronized boolean isCached(K key) {
         return cacheEntries.containsKey(key);
     }
 
