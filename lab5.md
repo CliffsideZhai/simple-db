@@ -11,9 +11,16 @@ scans. We supply you with all of the low-level code you will need to implement
 the tree structure. You will implement searching, splitting pages,
 redistributing tuples between pages, and merging pages.
 
+在本实验中，您将实现 B+ 树索引以进行高效查找和范围扫描。 
+我们为您提供了实现树结构所需的所有低级代码。 
+您将实现搜索、拆分页面、在页面之间重新分配元组以及合并页面。
+
 You may find it helpful to review sections 10.3--10.7 in the textbook, which
 provide detailed information about the structure of B+ trees as well as
 pseudocode for searches, inserts and deletes.
+
+您可能会发现查看教科书中的 10.3--10.7 节很有帮助，
+其中提供了有关 B+ 树结构的详细信息以及用于搜索、插入和删除的伪代码。
 
 As described by the textbook and discussed in class, the internal nodes in B+
 trees contain multiple entries, each consisting of a key value and a left and a
@@ -25,6 +32,14 @@ the data entries. Adjacent leaf pages are linked together with right and left
 sibling pointers, so range scans only require one initial search through the
 root and internal nodes to find the first leaf page. Subsequent leaf pages are
 found by following right (or left) sibling pointers.
+
+正如教科书和课堂讨论的那样，B+树中的内部节点包含多个条目，每个条目由一个键值和一个左右子指针组成。 
+相邻的键共享一个子指针，因此包含 *m* 个键的内部节点具有 *m*+1 个子指针。 
+叶节点可以包含数据条目或指向其他数据库文件中的数据条目的指针。 
+为简单起见，我们将实现一个 B+树，其中叶页实际上包含数据条目。 
+相邻的叶子页面通过左右兄弟指针链接在一起，
+因此范围扫描只需要通过根节点和内部节点进行一次初始搜索即可找到第一个叶子页面。
+通过跟随右（或左）兄弟指针找到后续的叶页。
 
 ## 1. Getting started
 
