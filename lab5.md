@@ -102,6 +102,12 @@ happens when the passed-in BTreePageId has `pgcateg()` equal to
 `BTreePageId.LEAF`, indicating that it is a leaf page.  In this case, you should
 just fetch the page from the buffer pool and return it.  You do not need to
 confirm that it actually contains the provided key value f.
+您的 `findLeafPage()` 函数应该递归搜索内部节点，直到它到达与提供的键值对应的叶页面。
+为了在每一步找到合适的子页面，您应该遍历内部页面中的条目并将条目值与提供的键值进行比较。
+`BTreeInternalPage.iterator()` 使用定义在 `BTreeEntry.java` 中的接口提供对内部页面中条目的访问。 
+此迭代器允许您遍历内部页面中的键值并访问每个键的左右子页面 id。 
+递归的基本情况发生在传入的 BTreePageId 的 `pgcateg()` 等于 `BTreePageId.LEAF` 时，
+表明它是一个叶页面。 在这种情况下，您应该只从缓冲池中获取页面并返回它。 您不需要确认它确实包含提供的键值 f。
 
 
 Your `findLeafPage()` code must also handle the case when the provided key value
@@ -111,6 +117,11 @@ is useful for scanning the entire file. Once the correct leaf page is found, you
 should return it.  As mentioned above, you can check the type of page using the
 `pgcateg()` function in `BTreePageId.java`. You can assume that only leaf and
 internal pages will be passed to this function.
+您的 `findLeafPage()` 代码还必须处理提供的键值 f 为空的情况。 
+如果提供的值为空，则每次都在最左侧的孩子上递归以找到最左侧的叶页面。 
+查找最左边的叶子页面对于扫描整个文件很有用。 
+一旦找到正确的叶子页面，您应该返回它。 
+如上所述，您可以使用“BTreePageId.java”中的“pgcateg()”函数检查页面类型。 您可以假设只有叶页和内部页会传递给此函数。
 
 
 Instead of directly calling `BufferPool.getPage()` to get each internal page and
@@ -119,6 +130,10 @@ leaf page, we recommend calling the wrapper function we have provided,
 an extra argument to track the list of dirty pages.  This function will be
 important for the next two exercises in which you will actually update the data
 and therefore need to keep track of dirty pages.
+我们建议不要直接调用`BufferPool.getPage()`来获取每个内部页面和叶子页面，
+而是建议调用我们提供的包装函数`BTreeFile.getPage()`。
+它的工作原理与 BufferPool.getPage() 完全一样，但需要一个额外的参数来跟踪脏页列表。
+这个函数对于接下来的两个练习很重要，在这两个练习中您将实际更新数据，因此需要跟踪脏页。
 
 
 Every internal (non-leaf) page your `findLeafPage()` implementation visits
@@ -126,6 +141,9 @@ should be fetched with READ_ONLY permission, except the returned leaf page,
 which should be fetched with the permission provided as an argument to the
 function.  These permission levels will not matter for this lab, but they will
 be important for the code to function correctly in future labs.
+您的 `findLeafPage()` 实现访问的每个内部（非叶）页面都应该使用 READ_ONLY 权限获取，
+返回的叶页面除外，应该使用作为函数参数提供的权限获取。 
+这些权限级别对于本实验室无关紧要，但对于代码在未来实验室中正常运行非常重要。
 
 ***
 
@@ -149,7 +167,10 @@ enclosing key range. As was mentioned above, `findLeafPage()` can be used to
 find the correct leaf page into which we should insert the tuple. However, each
 page has a limited number of slots and we need to be able to insert tuples even
 if the corresponding leaf page is full.
-
+为了保持 B+Tree 的元组有序并保持树的完整性，
+我们必须将元组插入包含封闭键范围的叶页中。 
+如上所述，`findLeafPage()` 可用于查找我们应该插入元组的正确叶页。
+但是，每个页面的插槽数量有限，即使相应的叶页面已满，我们也需要能够插入元组。
 
 As described in the textbook, attempting to insert a tuple into a full leaf page
 should cause that page to split so that the tuples are evenly distributed
@@ -159,7 +180,11 @@ parent node. Occasionally, the internal node may also be full and unable to
 accept new entries. In that case, the parent should split and add a new entry to
 its parent. This may cause recursive splits and ultimately the creation of a new
 root node.
-
+如教科书中所述，尝试将元组插入完整的叶子页面应该会导致该页面分裂，
+以便元组均匀分布在两个新页面之间。 每次叶子页面拆分时，
+都需要将与第二个页面中的第一个元组对应的新条目添加到父节点。
+有时，内部节点也可能已满，无法接受新条目。 在这种情况下，
+父项应该拆分并向其父项添加一个新条目。 这可能会导致递归拆分并最终创建新的根节点。
 
 In this exercise you will implement `splitLeafPage()` and `splitInternalPage()`
 in `BTreeFile.java`. If the page being split is the root page, you will need to
