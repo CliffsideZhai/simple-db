@@ -29,7 +29,7 @@ import simpledb.transaction.TransactionId;
 public class BTreeFile implements DbFile {
 
 	private final File f;
-	private final TupleDesc td;
+	private final TupleDesc td;//
 	private final int tableid ;
 	private final int keyField;
 
@@ -38,7 +38,7 @@ public class BTreeFile implements DbFile {
 	 * 
 	 * @param f - the file that stores the on-disk backing store for this B+ tree
 	 *            file.
-	 * @param key - the field which index is keyed on
+	 * @param key - the field which index is keyed on ,used key
 	 * @param td - the tuple descriptor of tuples in the file
 	 */
 	public BTreeFile(File f, int key, TupleDesc td) {
@@ -188,6 +188,10 @@ public class BTreeFile implements DbFile {
                                        Field f)
 					throws DbException, TransactionAbortedException {
 		// some code goes here
+		//if pit just is leaf, return
+		if (pid.pgcateg() == BTreePageId.LEAF){
+			return (BTreeLeafPage)this.getPage(tid,dirtypages,pid,perm);
+		}
         return null;
 	}
 	

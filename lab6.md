@@ -11,6 +11,7 @@ log format and appends records to a log file at appropriate times
 during transactions. You will implement rollback and recovery using
 the contents of the log file.
 
+
 The logging code we provide generates records intended for
 physical whole-page undo and
 redo. When a page is first read in, our code remembers the original
