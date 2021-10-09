@@ -191,8 +191,37 @@ public class BTreeFile implements DbFile {
 		//if pit just is leaf, return
 		if (pid.pgcateg() == BTreePageId.LEAF){
 			return (BTreeLeafPage)this.getPage(tid,dirtypages,pid,perm);
+		}else {//如果當前不是leaf 節點
+			// internal and page can not be empty
+			BTreePageId nextSearchId;
+			BTreeInternalPage searchPage = (BTreeInternalPage) this.getPage(tid, dirtypages, pid, perm);
+
+			BTreeEntry entry;
+
+			Iterator<BTreeEntry> iterator = searchPage.iterator();
+
+			if (iterator.hasNext()) {
+				entry = iterator.next();
+			} else {
+				throw new DbException("findLeafPage: InternalPage must contain at least one data");
+			}
+
+			if (f == null) {
+				nextSearchId = entry.getLeftChild();
+			} else {
+				while (f.compare(Op.GREATER_THAN_OR_EQ, entry.getKey()) && iterator.hasNext()) {
+					entry = iterator.next();
+				}
+
+				if (f.compare(Op.LESS_THAN_OR_EQ, entry.getKey())) {
+					nextSearchId = entry.getLeftChild();
+				} else {
+					//greater than the last one
+					nextSearchId = entry.getRightChild();
+				}
+			}
+			return findLeafPage(tid, dirtypages, nextSearchId, perm, f);
 		}
-        return null;
 	}
 	
 	/**
