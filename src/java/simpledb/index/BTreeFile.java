@@ -272,8 +272,55 @@ public class BTreeFile implements DbFile {
 		// the new entry.  getParentWithEmtpySlots() will be useful here.  Don't forget to update
 		// the sibling pointers of all the affected leaf pages.  Return the page into which a 
 		// tuple with the given key field should be inserted.
-        return null;
-		
+		BTreeLeafPage newRightSib = (BTreeLeafPage)getEmptyPage(tid, dirtypages, BTreePageId.LEAF);
+		//copy half tuples
+
+		Iterator<Tuple> it = page.reverseIterator();
+
+		Tuple[] tupleToMove = new Tuple[(page.getNumTuples() + 1) / 2];
+		int moveCount = tupleToMove.length-1;
+		while (moveCount>=0 && it.hasNext()){
+			tupleToMove[moveCount--] = it.next();
+		}
+
+		//刪除 當前page的右邊一半，添加到新page
+		for (int i = tupleToMove.length-1 ; i>=0;i--){
+			page.deleteTuple(tupleToMove[i]);
+			newRightSib.insertTuple(tupleToMove[i]);
+		}
+
+		// assert newRightSib.getNumTuples() >= 1;
+		Field midkey = tupleToMove[0].getField(keyField);
+		BTreeInternalPage parent= getParentWithEmptySlots(tid, dirtypages, page.getParentId(), midkey);
+
+		BTreePageId oldRightSibID = page.getRightSiblingId();
+		newRightSib.setRightSiblingId(oldRightSibID);
+		newRightSib.setLeftSiblingId(page.getId());
+		page.setRightSiblingId(newRightSib.getId());
+		// set up parent
+		newRightSib.setParentId(parent.getId());
+		page.setParentId(parent.getId());
+
+		// Leaf -> internal, copy to parent
+		BTreeEntry newParentEntry = new BTreeEntry(midkey, page.getId(), newRightSib.getId());
+		parent.insertEntry(newParentEntry);
+
+		// set dirtypages and old sibs
+		if (oldRightSibID != null){
+			BTreeLeafPage oldRightSib = (BTreeLeafPage)getPage(tid, dirtypages, page.getRightSiblingId(), Permissions.READ_WRITE);
+			oldRightSib.setLeftSiblingId(newRightSib.getId());
+			dirtypages.put(oldRightSib.getId(),oldRightSib);
+		}
+
+		dirtypages.put(parent.getId(),parent);
+		dirtypages.put(page.getId(),page);
+		dirtypages.put(newRightSib.getId(),newRightSib);
+
+		if (field.compare(Op.GREATER_THAN,midkey)){
+			return newRightSib;
+		}else {
+			return page;
+		}
 	}
 	
 	/**
@@ -310,7 +357,49 @@ public class BTreeFile implements DbFile {
 		// the parent pointers of all the children moving to the new page.  updateParentPointers()
 		// will be useful here.  Return the page into which an entry with the given key field
 		// should be inserted.
-		return null;
+
+		BTreeInternalPage newInternalPage = (BTreeInternalPage)getEmptyPage(tid, dirtypages, BTreePageId.INTERNAL);
+		Iterator<BTreeEntry> it = page.reverseIterator();
+		BTreeEntry[] entryToMove = new BTreeEntry[(page.getNumEntries() + 1) / 2];
+		int moveCount = entryToMove.length -1;
+		BTreeEntry midkey=null;
+
+		while (moveCount>=0 && it.hasNext()){
+			entryToMove[moveCount--] = it.next();
+		}
+
+		for (int i =entryToMove.length-1;i>=0 ;i--){
+			if (i==0){
+				page.deleteKeyAndRightChild(entryToMove[i]);
+				midkey = entryToMove[0];
+			}else {
+				page.deleteKeyAndRightChild(entryToMove[i]);
+				newInternalPage.insertEntry(entryToMove[i]);
+			}
+			updateParentPointer(tid,dirtypages,newInternalPage.getId(),entryToMove[i].getRightChild());
+		}
+
+		//update child
+		midkey.setLeftChild(page.getId());
+		midkey.setRightChild(newInternalPage.getId());
+
+		BTreeInternalPage parent = getParentWithEmptySlots(tid, dirtypages, page.getParentId(),midkey.getKey());
+		parent.insertEntry(midkey);
+
+		//update midkey
+		page.setParentId(parent.getId());
+		newInternalPage.setParentId(parent.getParentId());
+
+		dirtypages.put(page.getId(),page);
+		dirtypages.put(newInternalPage.getId(),newInternalPage);
+		dirtypages.put(parent.getId(),parent);
+
+		if (field.compare(Op.GREATER_THAN,midkey.getKey())){
+			return newInternalPage;
+		}else {
+			return page;
+		}
+		//return null;
 	}
 	
 	/**
@@ -763,7 +852,6 @@ public class BTreeFile implements DbFile {
 	public void mergeInternalPages(TransactionId tid, Map<PageId, Page> dirtypages,
 			BTreeInternalPage leftPage, BTreeInternalPage rightPage, BTreeInternalPage parent, BTreeEntry parentEntry) 
 					throws DbException, IOException, TransactionAbortedException {
-		
 		// some code goes here
         //
         // Move all the entries from the right page to the left page, update
