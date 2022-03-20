@@ -148,7 +148,7 @@ public class BufferPool {
         Page removedPage = bufferPool.put(pid, newPage);
         if (removedPage != null) {
             try {
-                flushPage(removedPage.getId());
+                flushPage(removedPage);
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -304,7 +304,7 @@ public class BufferPool {
         while (it.hasNext()) {
             Page p = it.next();
             if (p.isDirty() != null) {
-                flushPage(p.getId());
+                flushPage(p);
             }
         }
     }
@@ -326,13 +326,13 @@ public class BufferPool {
 
     /**
      * Flushes a certain page to disk
-     * @param pid an ID indicating the page to flush
+     * @param page an ID indicating the page to flush
      */
-    private synchronized  void flushPage(PageId pid) throws IOException {
+    private synchronized  void flushPage(Page page) throws IOException {
         // some code goes here
         // not necessary for lab1
-        DbFile databaseFile = Database.getCatalog().getDatabaseFile(pid.getTableId());
-        HeapPage page = (HeapPage) databaseFile.readPage(pid);
+        DbFile databaseFile = Database.getCatalog().getDatabaseFile(page.getId().getTableId());
+        //HeapPage page = (HeapPage) databaseFile.readPage(pid);
         databaseFile.writePage(page);
         page.markDirty(false,null);
 
@@ -348,7 +348,7 @@ public class BufferPool {
             Page p = it.next();
             if (p.isDirty() != null && p.isDirty().equals(tid)) {
                 try {
-                    flushPage(p.getId());
+                    flushPage(p);
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
